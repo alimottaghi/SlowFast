@@ -1,0 +1,83 @@
+TRAIN:
+  ENABLE: True
+  DATASET: kinetics
+  BATCH_SIZE: 64
+  EVAL_PERIOD: 1
+  CHECKPOINT_PERIOD: 5
+  AUTO_RESUME: True
+  CHECKPOINT_FILE_PATH: /data/pretrained/swin_tiny_patch244_window877_kinetics400_1k.pth
+  CHECKPOINT_EPOCH_RESET: True
+DATA:
+  PATH_TO_DATA_DIR: /data/NanoKinetics
+  PATH_PREFIX: /data/NanoKinetics
+  DECODING_BACKEND: pyav
+  NUM_FRAMES: 8
+  SAMPLING_RATE: 32
+  TRAIN_JITTER_SCALES: [256, 320]
+  TRAIN_CROP_SIZE: 224
+  TEST_CROP_SIZE: 224
+  INPUT_CHANNEL_NUM: [3]
+AUG:
+  ENABLE: True
+  AA_TYPE: rand-m9-mstd0.5-inc1
+  COLOR_JITTER: 0.4
+  RE_COUNT: 1
+  RE_PROB: 0.25
+SWIN:
+  DEPTHS: [2, 2, 6, 2]
+  EMBED_DIM: 96
+  PATCH_NORM: True
+  FROZEN_STAGES: False
+  WINDOW_SIZE: (8, 7, 7)
+  PATCH_SIZE: (2, 4, 4) 
+  NUM_HEADS: [3, 6, 12, 24]
+  IN_CHANS: 3
+  MLP_RATIO: 4.0
+  QKV_BIAS: True
+  QK_SCALE: None
+  DROP_RATE: 0.0
+  ATTN_DROP_RATE: 0.0
+  DROP_PATH_RATE: 0.1
+  NORM_LAYER: layernorm
+  PATCH_NORM: True
+  USE_CHECKPOINT: False
+SOLVER:
+  BASE_LR: 0.001
+  LR_POLICY: cosine
+  MAX_EPOCH: 30
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 1e-4
+  OPTIMIZING_METHOD: sgd
+MODEL:
+  MODEL_NAME: SwinTransformer3D
+  NUM_CLASSES: 10
+  ARCH: vit
+  LOSS_FUNC: cross_entropy
+  DROPOUT_RATE: 0.5
+TEST:
+  ENABLE: True
+  DATASET: kinetics
+  BATCH_SIZE: 8
+  NUM_ENSEMBLE_VIEWS: 1
+  NUM_SPATIAL_CROPS: 3
+DATA_LOADER:
+  NUM_WORKERS: 8
+  PIN_MEMORY: True
+TENSORBOARD:
+  ENABLE: True
+  SYNC_WANDB: True
+  LOG_DIR: logs
+  CLASS_NAMES_PATH: '/data/NanoKinetics/classnames.json'
+  CONFUSION_MATRIX:
+    ENABLE: True
+  SAMPLE_VIS:
+    ENABLE: True
+    LOG_PERIOD: 200
+  DIST_VIS:
+    ENABLE: True
+    LOG_PERIOD: 200
+NUM_GPUS: 4
+NUM_SHARDS: 1
+RNG_SEED: 0
+OUTPUT_DIR: /data/runs/Kinetics/NanoKinetics_Sup_Swin96_run10
+LOG_MODEL_INFO: False
