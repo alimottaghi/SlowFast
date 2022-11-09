@@ -91,17 +91,17 @@ ADAPTATION:
 ADAEMBED:
   LAMBDA: 0.0
   LAMBDA_T: 1.0
-  LAMBDA_P: 0.0
-  LAMBDA_C: 0.0
+  LAMBDA_P: 1.0
+  LAMBDA_C: 0.1
   TEMP: 0.05
   M: 0.99
   TAU: 0.9
   NUM_NEIGHBORS: 10
   PSEUDO_TYPE: 'AdaMatch'
   ALIGNMENT: True
-  SAMPLING: False
+  SAMPLING: True
 NUM_GPUS: 4
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /data/runs/DomainNet/P2R_AdaEmbed_AdaMatch_Swin96_run0
+OUTPUT_DIR: /data/runs/DomainNet/P2R_AdaEmbed_Swin96_run5
 LOG_MODEL_INFO: False

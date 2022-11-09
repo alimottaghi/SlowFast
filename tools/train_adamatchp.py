@@ -229,7 +229,33 @@ def train_epoch(
             mask = pred_mask * sampling_mask
             loss_t = loss_fun_none(logits_tus, pseudo_labels)
             loss_t = (mask * loss_t).mean(dim=0)
-            loss = loss_s + cfg.ADAEMBED.LAMBDA_T * mu * loss_t
+
+            # Prototype loss
+            prototypes = model.module.head.weight.clone().detach()
+            q = F.normalize(lab_feats_strong, dim=1)
+            k = prototypes[lab_labels]
+            l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
+            l_neg = torch.einsum("nc,ck->nk", [q, prototypes.T])
+            logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
+            labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
+            loss_p = F.cross_entropy(logits_ins, labels_ins)
+
+            # Contrastive loss
+            q = F.normalize(feats_tus, dim=1)
+            k = F.normalize(feats_tuw, dim=1)
+            mem_feat = F.normalize(unl_feats_bank, dim=1)
+            mem_label = torch.argmax(unl_probs_bank, dim=1)
+            l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
+            l_neg = torch.einsum("nc,ck->nk", [q, mem_feat.T])
+            logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
+            labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
+            mask_ins = torch.ones_like(logits_ins, dtype=torch.bool)
+            mask_ins[:, 1:] = pseudo_labels.reshape(-1, 1) != mem_label  # (B, K)
+            logits_ins = torch.where(mask_ins, logits_ins, torch.tensor([float("-inf")]).cuda())
+            loss_c = F.cross_entropy(logits_ins, labels_ins)
+
+            loss = loss_s + cfg.ADAEMBED.LAMBDA_T * mu * loss_t + \
+                + cfg.ADAEMBED.LAMBDA_P * mu * loss_p + cfg.ADAEMBED.LAMBDA_C * mu * loss_c
 
         # check Nan Loss.
         misc.check_nan_losses(loss)
@@ -265,8 +291,8 @@ def train_epoch(
         
         # Gather all the predictions across all the devices.
         if cfg.NUM_GPUS > 1:
-            loss, loss_s, loss_t, top1_err, top5_err = du.all_reduce(
-                [loss.detach(), loss_s, loss_t, top1_err, top5_err]
+            loss, loss_s, loss_t, loss_p, loss_c, top1_err, top5_err = du.all_reduce(
+                [loss.detach(), loss_s, loss_t, loss_p, loss_c, top1_err, top5_err]
             )
             num_pred_mask, num_sampling_mask, num_pseudo, num_correct = du.all_reduce(
                 [num_pred_mask, num_sampling_mask, num_pseudo, num_correct], 
@@ -274,10 +300,12 @@ def train_epoch(
             )
 
         # Copy the stats from GPU to CPU (sync point).
-        loss, loss_s, loss_t, top1_err, top5_err = (
+        loss, loss_s, loss_t, loss_p, loss_c, top1_err, top5_err = (
             loss.item(),
             loss_s.item(), 
             loss_t.item(),
+            loss_p.item(), 
+            loss_c.item(),
             top1_err.item(),
             top5_err.item()
         )
@@ -310,6 +338,8 @@ def train_epoch(
                 "Train/loss": loss,
                 "Train/loss_s": loss_s,
                 "Train/loss_t": loss_t,
+                "Train/loss_p": loss_p,
+                "Train/loss_c": loss_c,
                 "Train/lr": lr,
                 "Train/Top1_err": top1_err,
                 "Train/Top5_err": top5_err,
