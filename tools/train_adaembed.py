@@ -278,6 +278,7 @@ def train_epoch(
             loss_s = loss_fun(lab_logits, lab_labels)
             
             # Pseudo label generation
+            prototypes = classifier.fc.weight
             preds_tuw = F.softmax(logits_tuw, dim=1)
             if cfg.ADAEMBED.PSEUDO_TYPE=='AdaMatch':
                 preds_tuw_refined = F.normalize(alignment * preds_tuw, p=1, dim=1)
@@ -295,6 +296,18 @@ def train_epoch(
                     refined_probs.append(probs)
                 refined_probs = torch.stack(refined_probs)
                 preds_tuw_refined = F.normalize(alignment * refined_probs, p=1, dim=1)
+            elif cfg.ADAEMBED.PSEUDO_TYPE=='AdaEmbed':
+                distances = get_distances(unl_feats, feats_bank)
+                refined_probs = []
+                for i in range(len(unl_feats)):
+                    dists = distances[i, :]
+                    _, idxs = dists.sort()
+                    idxs = idxs[:cfg.ADAEMBED.NUM_NEIGHBORS]
+                    probs = probs_bank[idxs, :].mean(0)
+                    refined_probs.append(probs)
+                refined_probs = torch.stack(refined_probs)
+                preds_tuw_refined = F.normalize(alignment * refined_probs, p=1, dim=1)
+            
             else:
                 preds_tuw_refined = preds_tuw
             pseudo_labels = torch.argmax(preds_tuw_refined, dim=1)
@@ -305,7 +318,6 @@ def train_epoch(
             loss_t = (mask * loss_t).mean(dim=0)
 
             # Prototype loss
-            prototypes = classifier.fc.weight
             if cfg.ADAEMBED.LAMBDA_P:
                 q = lab_feats_strong
                 k = prototypes[lab_labels]

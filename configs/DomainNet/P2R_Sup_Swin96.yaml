@@ -68,7 +68,7 @@ DATA_LOADER:
   PIN_MEMORY: True
 TENSORBOARD:
   ENABLE: True
-  SYNC_WANDB: False
+  SYNC_WANDB: True
   LOG_DIR: logs
   CLASS_NAMES_PATH: /data/DomainNet/classnames.json
   CONFUSION_MATRIX:
