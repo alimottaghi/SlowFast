@@ -232,16 +232,7 @@ def train_epoch(
 
             # Prototype loss
             prototypes = model.module.head.weight.clone().detach()
-            q = F.normalize(lab_feats_strong, dim=1)
-            k = prototypes[lab_labels]
-            l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
-            l_neg = torch.einsum("nc,ck->nk", [q, prototypes.T])
-            logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
-            labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
-            mask_ins = torch.ones_like(logits_ins, dtype=torch.bool)
-            mask_ins[:, 1:] = lab_labels.reshape(-1, 1) != torch.arange(cfg.MODEL.NUM_CLASSES).cuda()  # (B, K)
-            logits_ins = torch.where(mask_ins, logits_ins, torch.tensor([float("-inf")]).cuda())
-            loss_p = F.cross_entropy(logits_ins, labels_ins)
+            loss_p = torch.zeros_like(loss_s)
 
             # Contrastive loss
             q = F.normalize(feats_tus, dim=1)

@@ -119,5 +119,6 @@ def add_custom_config(_C):
     _C.ADAEMBED.TAU = 0.9
     _C.ADAEMBED.NUM_NEIGHBORS = 10
     _C.ADAEMBED.PSEUDO_TYPE = "AdaMatch"
+    _C.ADAEMBED.THRESHOLDING = "uniform"
     _C.ADAEMBED.ALIGNMENT = True
     _C.ADAEMBED.SAMPLING = True

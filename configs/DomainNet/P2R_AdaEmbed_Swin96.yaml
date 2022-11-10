@@ -81,7 +81,7 @@ TENSORBOARD:
     LOG_PERIOD: 1000
 ADAPTATION:
   ENABLE: True
-  ADAPTATION_TYPE: 'AdaMatch+'
+  ADAPTATION_TYPE: 'AdaEmbed'
   SOURCE: ['painting']
   TARGET: ['real']
   BETA: 1
@@ -90,18 +90,19 @@ ADAPTATION:
     NUM_SHOTS: 3
 ADAEMBED:
   LAMBDA: 0.0
-  LAMBDA_T: 1.0
-  LAMBDA_P: 1.0
-  LAMBDA_C: 1.0
+  LAMBDA_T: 2.0
+  LAMBDA_P: 0.0
+  LAMBDA_C: 0.01
   TEMP: 0.05
   M: 0.99
   TAU: 0.9
   NUM_NEIGHBORS: 10
   PSEUDO_TYPE: 'AdaMatch'
+  THRESHOLDING: 'unifrom'
   ALIGNMENT: True
   SAMPLING: True
 NUM_GPUS: 4
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /data/runs/DomainNet/P2R_AdaEmbed_Swin96_run6
+OUTPUT_DIR: /data/runs/DomainNet/P2R_AdaEmbed_Swin96_run8
 LOG_MODEL_INFO: False

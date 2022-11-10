@@ -12,7 +12,7 @@ from train_net import train
 from visualization import visualize
 from extract_features import extract
 from train_adamatch import train as adamatch
-from train_adamatchp import train as adaembed
+from train_adaembed import train as adaembed
 from train_mme import train as mme
 from train_mcd import train as mcd
 
@@ -32,7 +32,7 @@ def main():
     # Perform training.
     if cfg.TRAIN.ENABLE:
         if cfg.ADAPTATION.ENABLE:
-            if cfg.ADAPTATION.ADAPTATION_TYPE == "AdaMatch+":
+            if cfg.ADAPTATION.ADAPTATION_TYPE == "AdaEmbed":
                 launch_job(cfg=cfg, init_method=args.init_method, func=adaembed)
             elif cfg.ADAPTATION.ADAPTATION_TYPE == "AdaMatch":
                 launch_job(cfg=cfg, init_method=args.init_method, func=adamatch)
