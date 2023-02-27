@@ -81,7 +81,7 @@ TENSORBOARD:
   DIST_VIS:
     ENABLE: True
     LOG_PERIOD: 1000
-NUM_GPUS: 8
+NUM_GPUS: 4
 NUM_SHARDS: 1
 RNG_SEED: 0
 OUTPUT_DIR: /pasteur/results/slowfast/ucf_hmdb/UCF2HMDB_Sup_Swin96_run0

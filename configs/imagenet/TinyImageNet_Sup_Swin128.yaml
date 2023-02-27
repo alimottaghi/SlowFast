@@ -1,7 +1,7 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 256
+  BATCH_SIZE: 128
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
@@ -63,7 +63,7 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  # CLASS_NAMES_PATH: '/data/TinyImageNet/classnames.json'
+  # CLASS_NAMES_PATH: /data/TinyImageNet/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
@@ -72,7 +72,7 @@ TENSORBOARD:
   DIST_VIS:
     ENABLE: False
     LOG_PERIOD: 1000
-NUM_GPUS: 8
+NUM_GPUS: 4
 NUM_SHARDS: 1
 RNG_SEED: 0
 OUTPUT_DIR: /pasteur/results/slowfast/imagenet/TinyImageNet_Swin128_run0
