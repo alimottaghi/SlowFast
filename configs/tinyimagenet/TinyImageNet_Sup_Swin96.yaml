@@ -1,14 +1,14 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 128
+  BATCH_SIZE: 1024
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
-  CHECKPOINT_FILE_PATH: /data/pretrained/swin_base_patch4_window7_224.pth
+  CHECKPOINT_FILE_PATH: /pasteur/u/mottaghi/model_hub/swin_tiny_patch4_window7_224.pth
   CHECKPOINT_EPOCH_RESET: True
 DATA:
-  PATH_TO_DATA_DIR: /data/TinyImageNet
+  PATH_TO_DATA_DIR: /pasteur/u/mottaghi/tinyimagenet
   TRAIN_JITTER_SCALES: [256, 320]
   TRAIN_CROP_SIZE: 224
   TEST_CROP_SIZE: 224
@@ -20,36 +20,32 @@ AUG:
   RE_COUNT: 1
   RE_PROB: 0.25
 SWIN:
-  DEPTHS: [2, 2, 18, 2]
-  EMBED_DIM: 128
+  DEPTHS: [2, 2, 6, 2]
+  EMBED_DIM: 96
   PATCH_NORM: True
-  FROZEN_STAGES: False
+  FROZEN_STAGES: -1
   WINDOW_SIZE: (7, 7)
   PATCH_SIZE: (4, 4) 
-  NUM_HEADS: [4, 8, 16, 32]
+  NUM_HEADS: [3, 6, 12, 24]
   IN_CHANS: 3
   MLP_RATIO: 4.0
   QKV_BIAS: True
   QK_SCALE: None
   DROP_RATE: 0.0
   ATTN_DROP_RATE: 0.0
-  DROP_PATH_RATE: 0.5
+  DROP_PATH_RATE: 0.2
+  DROP_HEAD: 0.5
   NORM_LAYER: layernorm
-  PATCH_NORM: True
-  USE_CHECKPOINT: False
+  SPATIAL_TYPE: avg
+  # FEW_SHOT: True
+  # TEMP: 0.05
 SOLVER:
-  BASE_LR: 0.0001
+  BASE_LR: 0.001
   LR_POLICY: cosine
-  MAX_EPOCH: 30
+  MAX_EPOCH: 40
   MOMENTUM: 0.9
-  WEIGHT_DECAY: 0.05
-  WARMUP_EPOCHS: 7.0
-  WARMUP_START_LR: 1e-8
-  OPTIMIZING_METHOD: adamw
-  COSINE_AFTER_WARMUP: True
-  COSINE_END_LR: 1e-6
-  ZERO_WD_1D_PARAM: True
-  CLIP_GRAD_L2NORM: 1.0
+  WEIGHT_DECAY: 1e-4
+  OPTIMIZING_METHOD: sgd
 MODEL:
   MODEL_NAME: SwinTransformer
   NUM_CLASSES: 200
@@ -69,17 +65,17 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  # CLASS_NAMES_PATH: '/data/TinyImageNet/classnames.json'
+  # CLASS_NAMES_PATH: /data/TinyImageNet/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
     ENABLE: False
-    LOG_PERIOD: 200
+    LOG_PERIOD: 1000
   DIST_VIS:
     ENABLE: False
-    LOG_PERIOD: 200
-NUM_GPUS: 4
+    LOG_PERIOD: 1000
+NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /data/runs/ImageNet/TinyImageNet_Swin128_run0_test3
+OUTPUT_DIR: /pasteur/u/mottaghi/adaembed/TinyImageNet_Swin96_run0
 LOG_MODEL_INFO: False

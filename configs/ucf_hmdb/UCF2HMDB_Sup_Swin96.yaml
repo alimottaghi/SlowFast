@@ -5,11 +5,16 @@ TRAIN:
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
-  CHECKPOINT_FILE_PATH: /data/pretrained/swin_tiny_patch244_window877_kinetics400_1k.pth
+  CHECKPOINT_FILE_PATH: /pasteur/u/mottaghi/model_hub/swin_tiny_patch244_window877_kinetics400_1k.pth
   CHECKPOINT_EPOCH_RESET: True
 DATA:
-  PATH_TO_DATA_DIR: /data/NanoKinetics
-  PATH_PREFIX: /data/NanoKinetics
+  PATH_TO_DATA_DIR: /pasteur/u/mottaghi
+  PATH_PREFIX: /pasteur/u/mottaghi
+  PATH_TO_PRELOAD_IMDB: /pasteur/u/mottaghi
+  IMDB_FILES:
+    TRAIN: ['UCF2HMDB_train']
+    VAL: ['HMDB2UCF_train']
+    TEST: ['HMDB2UCF_val']
   DECODING_BACKEND: pyav
   NUM_FRAMES: 8
   SAMPLING_RATE: 32
@@ -27,7 +32,7 @@ SWIN:
   DEPTHS: [2, 2, 6, 2]
   EMBED_DIM: 96
   PATCH_NORM: True
-  FROZEN_STAGES: False
+  FROZEN_STAGES: -1
   WINDOW_SIZE: (8, 7, 7)
   PATCH_SIZE: (2, 4, 4) 
   NUM_HEADS: [3, 6, 12, 24]
@@ -37,20 +42,22 @@ SWIN:
   QK_SCALE: None
   DROP_RATE: 0.0
   ATTN_DROP_RATE: 0.0
-  DROP_PATH_RATE: 0.1
+  DROP_PATH_RATE: 0.2
+  DROP_HEAD: 0.5
   NORM_LAYER: layernorm
-  PATCH_NORM: True
-  USE_CHECKPOINT: False
+  SPATIAL_TYPE: avg
+  # FEW_SHOT: True
+  # TEMP: 0.05
 SOLVER:
   BASE_LR: 0.001
   LR_POLICY: cosine
-  MAX_EPOCH: 30
+  MAX_EPOCH: 40
   MOMENTUM: 0.9
   WEIGHT_DECAY: 1e-4
   OPTIMIZING_METHOD: sgd
 MODEL:
   MODEL_NAME: SwinTransformer3D
-  NUM_CLASSES: 10
+  NUM_CLASSES: 12
   ARCH: vit
   LOSS_FUNC: cross_entropy
   DROPOUT_RATE: 0.5
@@ -67,17 +74,17 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: '/data/NanoKinetics/classnames.json'
+  CLASS_NAMES_PATH: /pasteur/u/mottaghi/UCF_HMDB_classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
     ENABLE: True
-    LOG_PERIOD: 200
+    LOG_PERIOD: 1000
   DIST_VIS:
     ENABLE: True
-    LOG_PERIOD: 200
-NUM_GPUS: 4
+    LOG_PERIOD: 1000
+NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /data/runs/Kinetics/NanoKinetics_Sup_Swin96_run10
+OUTPUT_DIR: /pasteur/u/mottaghi/adaembed/UCF2HMDB_Sup_Swin96_run0
 LOG_MODEL_INFO: False

@@ -16,10 +16,6 @@ from train_adaembed import train as adaembed
 from train_mme import train as mme
 from train_mcd import train as mcd
 
-import os
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0, 1, 2, 3"
-
 def main():
     """
     Main function to spawn the train and test process.
@@ -60,9 +56,9 @@ def main():
     ):
         launch_job(cfg=cfg, init_method=args.init_method, func=visualize)
 
-    # # Run demo.
-    # if cfg.DEMO.ENABLE:
-    #     demo(cfg)
+    # Run demo.
+    if cfg.DEMO.ENABLE:
+        demo(cfg)
 
 
 if __name__ == "__main__":

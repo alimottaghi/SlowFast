@@ -1,18 +1,14 @@
 TRAIN:
   ENABLE: True
-  DATASET: kinetics
-  BATCH_SIZE: 32
+  DATASET: imagenet
+  BATCH_SIZE: 256
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
-  CHECKPOINT_FILE_PATH: /data/pretrained/swin_base_patch244_window877_kinetics600_22k.pth
+  CHECKPOINT_FILE_PATH: /pasteur/u/mottaghi/model_hub/swin_base_patch4_window7_224.pth
   CHECKPOINT_EPOCH_RESET: True
 DATA:
-  PATH_TO_DATA_DIR: /data/NanoKinetics
-  PATH_PREFIX: /data/NanoKinetics
-  DECODING_BACKEND: pyav
-  NUM_FRAMES: 8
-  SAMPLING_RATE: 32
+  PATH_TO_DATA_DIR: /pasteur/u/mottaghi/tinyimagenet
   TRAIN_JITTER_SCALES: [256, 320]
   TRAIN_CROP_SIZE: 224
   TEST_CROP_SIZE: 224
@@ -27,9 +23,9 @@ SWIN:
   DEPTHS: [2, 2, 18, 2]
   EMBED_DIM: 128
   PATCH_NORM: True
-  FROZEN_STAGES: False
-  WINDOW_SIZE: (8, 7, 7)
-  PATCH_SIZE: (2, 4, 4) 
+  FROZEN_STAGES: -1
+  WINDOW_SIZE: (7, 7)
+  PATCH_SIZE: (4, 4) 
   NUM_HEADS: [4, 8, 16, 32]
   IN_CHANS: 3
   MLP_RATIO: 4.0
@@ -37,32 +33,28 @@ SWIN:
   QK_SCALE: None
   DROP_RATE: 0.0
   ATTN_DROP_RATE: 0.0
-  DROP_PATH_RATE: 0.5
+  DROP_PATH_RATE: 0.2
+  DROP_HEAD: 0.5
   NORM_LAYER: layernorm
-  PATCH_NORM: True
-  USE_CHECKPOINT: False
+  SPATIAL_TYPE: avg
+  # FEW_SHOT: True
+  # TEMP: 0.05
 SOLVER:
-  BASE_LR: 0.0001
+  BASE_LR: 0.001
   LR_POLICY: cosine
   MAX_EPOCH: 30
   MOMENTUM: 0.9
-  WEIGHT_DECAY: 0.05
-  WARMUP_EPOCHS: 7.0
-  WARMUP_START_LR: 1e-8
-  OPTIMIZING_METHOD: adamw
-  COSINE_AFTER_WARMUP: True
-  COSINE_END_LR: 1e-6
-  ZERO_WD_1D_PARAM: True
-  CLIP_GRAD_L2NORM: 1.0
+  WEIGHT_DECAY: 1e-4
+  OPTIMIZING_METHOD: sgd
 MODEL:
-  MODEL_NAME: SwinTransformer3D
-  NUM_CLASSES: 10
+  MODEL_NAME: SwinTransformer
+  NUM_CLASSES: 200
   ARCH: vit
   LOSS_FUNC: cross_entropy
   DROPOUT_RATE: 0.5
 TEST:
   ENABLE: True
-  DATASET: kinetics
+  DATASET: imagenet
   BATCH_SIZE: 8
   NUM_ENSEMBLE_VIEWS: 1
   NUM_SPATIAL_CROPS: 3
@@ -73,17 +65,17 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: '/data/NanoKinetics/classnames.json'
+  # CLASS_NAMES_PATH: '/data/TinyImageNet/classnames.json'
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
-    ENABLE: True
-    LOG_PERIOD: 200
+    ENABLE: False
+    LOG_PERIOD: 1000
   DIST_VIS:
-    ENABLE: True
-    LOG_PERIOD: 200
-NUM_GPUS: 4
+    ENABLE: False
+    LOG_PERIOD: 1000
+NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /data/runs/Kinetics/NanoKinetics_Sup_Swin128_run0_test3
+OUTPUT_DIR: /pasteur/u/mottaghi/adaembed/TinyImageNet_Swin128_run0
 LOG_MODEL_INFO: False
