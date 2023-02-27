@@ -5,12 +5,12 @@ TRAIN:
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
-  CHECKPOINT_FILE_PATH: /pasteur/u/mottaghi/model_hub/swin_tiny_patch244_window877_kinetics400_1k.pth
+  CHECKPOINT_FILE_PATH: /pasteur/data/slowfast/models/swin_tiny_patch244_window877_kinetics400_1k.pth
   CHECKPOINT_EPOCH_RESET: True
 DATA:
-  PATH_TO_DATA_DIR: /pasteur/u/mottaghi
-  PATH_PREFIX: /pasteur/u/mottaghi
-  PATH_TO_PRELOAD_IMDB: /pasteur/u/mottaghi
+  PATH_TO_DATA_DIR: /pasteur/data/slowfast/datasets/ucf_hmdb
+  PATH_PREFIX: /pasteur/data/slowfast/datasets/ucf_hmdb
+  PATH_TO_PRELOAD_IMDB: /pasteur/data/slowfast/datasets/ucf_hmdb
   IMDB_FILES:
     TRAIN: ['UCF2HMDB_train']
     VAL: ['HMDB2UCF_train']
@@ -46,8 +46,6 @@ SWIN:
   DROP_HEAD: 0.5
   NORM_LAYER: layernorm
   SPATIAL_TYPE: avg
-  # FEW_SHOT: True
-  # TEMP: 0.05
 SOLVER:
   BASE_LR: 0.001
   LR_POLICY: cosine
@@ -74,7 +72,7 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: /pasteur/u/mottaghi/UCF_HMDB_classnames.json
+  CLASS_NAMES_PATH: /pasteur/data/slowfast/datasets/ucf_hmdb/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
@@ -86,5 +84,5 @@ TENSORBOARD:
 NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/adaembed/UCF2HMDB_Sup_Swin96_run0
+OUTPUT_DIR: /pasteur/results/slowfast/ucf_hmdb/UCF2HMDB_Sup_Swin96_run0
 LOG_MODEL_INFO: False

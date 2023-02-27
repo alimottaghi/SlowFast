@@ -1,14 +1,23 @@
 TRAIN:
   ENABLE: True
-  DATASET: imagenet
-  BATCH_SIZE: 1024
+  DATASET: kinetics
+  BATCH_SIZE: 128
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
-  CHECKPOINT_FILE_PATH: /pasteur/u/mottaghi/model_hub/swin_tiny_patch4_window7_224.pth
+  CHECKPOINT_FILE_PATH: /pasteur/results/slowfast/models/swin_tiny_patch244_window877_kinetics400_1k.pth
   CHECKPOINT_EPOCH_RESET: True
 DATA:
-  PATH_TO_DATA_DIR: /pasteur/u/mottaghi/tinyimagenet
+  PATH_TO_DATA_DIR: /pasteur/data/slowfast/datasets/kinetics10
+  PATH_PREFIX: /pasteur/data/slowfast/datasets/kinetics10
+  PATH_TO_PRELOAD_IMDB: /pasteur/data/slowfast/datasets/kinetics10
+  IMDB_FILES:
+    TRAIN: ['train']
+    VAL: ['val']
+    TEST: ['test']
+  DECODING_BACKEND: pyav
+  NUM_FRAMES: 8
+  SAMPLING_RATE: 32
   TRAIN_JITTER_SCALES: [256, 320]
   TRAIN_CROP_SIZE: 224
   TEST_CROP_SIZE: 224
@@ -24,8 +33,8 @@ SWIN:
   EMBED_DIM: 96
   PATCH_NORM: True
   FROZEN_STAGES: -1
-  WINDOW_SIZE: (7, 7)
-  PATCH_SIZE: (4, 4) 
+  WINDOW_SIZE: (8, 7, 7)
+  PATCH_SIZE: (2, 4, 4) 
   NUM_HEADS: [3, 6, 12, 24]
   IN_CHANS: 3
   MLP_RATIO: 4.0
@@ -37,8 +46,6 @@ SWIN:
   DROP_HEAD: 0.5
   NORM_LAYER: layernorm
   SPATIAL_TYPE: avg
-  # FEW_SHOT: True
-  # TEMP: 0.05
 SOLVER:
   BASE_LR: 0.001
   LR_POLICY: cosine
@@ -47,14 +54,14 @@ SOLVER:
   WEIGHT_DECAY: 1e-4
   OPTIMIZING_METHOD: sgd
 MODEL:
-  MODEL_NAME: SwinTransformer
-  NUM_CLASSES: 200
+  MODEL_NAME: SwinTransformer3D
+  NUM_CLASSES: 10
   ARCH: vit
   LOSS_FUNC: cross_entropy
   DROPOUT_RATE: 0.5
 TEST:
   ENABLE: True
-  DATASET: imagenet
+  DATASET: kinetics
   BATCH_SIZE: 8
   NUM_ENSEMBLE_VIEWS: 1
   NUM_SPATIAL_CROPS: 3
@@ -65,17 +72,17 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  # CLASS_NAMES_PATH: /data/TinyImageNet/classnames.json
+  CLASS_NAMES_PATH: /pasteur/data/slowfast/datasets/kinetics10/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
-    ENABLE: False
+    ENABLE: True
     LOG_PERIOD: 1000
   DIST_VIS:
-    ENABLE: False
+    ENABLE: True
     LOG_PERIOD: 1000
 NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/adaembed/TinyImageNet_Swin96_run0
+OUTPUT_DIR: /pasteur/results/slowfast/kinetics/Kinetics10_Sup_Swin96_run0
 LOG_MODEL_INFO: False
