@@ -50,6 +50,7 @@ def add_custom_config(_C):
     _C.SWIN.PRETRAINED_2D = False
     _C.SWIN.FEW_SHOT = False
     _C.SWIN.TEMP = 0.05
+    _C.SWIN.ETA = 0.1
 
     # TimeSformer Options
     _C.TIMESFORMER = CfgNode()

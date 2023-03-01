@@ -25,6 +25,21 @@ from operator import mul
 from einops import rearrange
 
 
+class GradientReverse(torch.autograd.Function):
+    scale = torch.tensor(1.0, requires_grad=False)
+    @staticmethod
+    def forward(ctx, x):
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return GradientReverse.scale * grad_output.neg()
+    
+def grad_reverse(x, scale=1.0):
+    GradientReverse.scale = scale
+    return GradientReverse.apply(x)
+
+
 class Mlp(nn.Module):
     """ Multilayer perceptron."""
 
@@ -539,6 +554,7 @@ class SwinTransformer3D(nn.Module):
         self.extracting = cfg.EXTRACT.ENABLE
         self.few_shot = cfg.SWIN.FEW_SHOT
         self.temp = cfg.SWIN.TEMP
+        self.eta = cfg.SWIN.ETA
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed3D(
@@ -691,7 +707,7 @@ class SwinTransformer3D(nn.Module):
         # else:
         #     raise TypeError('pretrained must be a str or None')
 
-    def forward(self, x, extract=False):
+    def forward(self, x, extract=False, reverse=False):
         """Forward function."""
         if isinstance(x, list) and len(x) == 1:
             x = x[0]
@@ -709,6 +725,8 @@ class SwinTransformer3D(nn.Module):
         if self.avg_pool is not None:
             x = self.avg_pool(x)
         feats = torch.clone(x)
+        if reverse:
+            x = grad_reverse(x, self.eta)
         if self.dropout is not None:
             x = self.dropout(x)
         x = x.view(int(x.shape[0]), -1)
@@ -719,9 +737,6 @@ class SwinTransformer3D(nn.Module):
             cls_score = self.head(x)
         
         if self.extracting or extract:
-            # feats_out = feats  # detach().clone()
-            # feats_out = rearrange(feats_out, 'n c d h w -> n d h w c')
-            # feats_out = feats_out.view(int(feats_out.shape[0]),-1)
             return cls_score, feats
         else:
             return cls_score

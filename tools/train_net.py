@@ -624,7 +624,7 @@ def train(cfg):
                 cur_epoch, 
                 cfg, 
                 writer,
-        )
+            )
 
     if writer is not None:
         writer.close()

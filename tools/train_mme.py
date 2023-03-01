@@ -69,7 +69,7 @@ class Predictor(nn.Module):
 
 def train_epoch(
     train_loaders, 
-    models, 
+    model, 
     optimizers, 
     scaler, 
     train_meter, 
@@ -96,12 +96,10 @@ def train_epoch(
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
         target_lab_loader = train_loaders[2]
 
-    backbone, classifier = models[0], models[1]
     optimizer_f, optimizer_c = optimizers[0], optimizers[1]
     
     # Enable train mode.
-    backbone.train()
-    classifier.train()
+    model.train()
 
     train_meter.iter_tic()
     data_size = len(source_loader)
@@ -162,8 +160,7 @@ def train_epoch(
             optimizer_f.zero_grad()
             optimizer_c.zero_grad()
 
-            _, lab_feats = backbone(lab_inputs)
-            lab_preds = classifier(lab_feats)
+            lab_preds, lab_feats = model(lab_inputs)
 
             criterion = nn.CrossEntropyLoss()
             loss_s = criterion(lab_preds, lab_labels)
@@ -175,15 +172,15 @@ def train_epoch(
             optimizer_f.zero_grad()
             optimizer_c.zero_grad()
 
-            _, unl_feats = backbone(unl_inputs)
-            unl_preds = classifier(unl_feats)
-
-            loss_h = adentropy(classifier, unl_feats, cfg.ADAEMBED.LAMBDA)
+            unl_preds, unl_feats = model(unl_inputs, reverse=True)
+            new_preds = F.softmax(unl_preds, dim=1)
+            loss_h = cfg.ADAEMBED.LAMBDA * torch.mean(
+                torch.sum(new_preds * (torch.log(new_preds + 1e-5)), 1))
             loss_h.backward()
             optimizer_f.step()
             optimizer_c.step()
 
-            prototypes = classifier.fc.weight
+            prototypes = model.module.head.weight
 
         # Compute the errors.
         num_topks_correct = metrics.topks_correct(lab_preds, lab_labels, (1, 5))
@@ -317,7 +314,7 @@ def train_epoch(
 
 @torch.no_grad()
 def eval_epoch(
-    val_loader, models, val_meter, cur_epoch, cfg, writer=None
+    val_loader, model, val_meter, cur_epoch, cfg, writer=None
     ):
     """
     Evaluate the model on the val set.
@@ -333,9 +330,7 @@ def eval_epoch(
     """
 
     # Evaluation mode enabled. The running stats would not be updated.
-    backbone, classifier = models[0], models[1]
-    backbone.eval()
-    classifier.eval()
+    model.eval()
     val_meter.iter_tic()
 
     for cur_iter, (inputs, labels, _, meta) in enumerate(val_loader):
@@ -355,8 +350,7 @@ def eval_epoch(
                     meta[key] = val.cuda(non_blocking=True)
         val_meter.data_toc()
 
-        _, feats = backbone(inputs)
-        preds = classifier(feats)
+        preds, feats = model(inputs)
 
         if cfg.DATA.MULTI_LABEL:
             if cfg.NUM_GPUS > 1:
@@ -483,38 +477,31 @@ def train(cfg):
 
     # Build the video model and print model statistics.
     cfg.EXTRACT.ENABLE = True
-    num_class = cfg.MODEL.NUM_CLASSES
-    cfg.MODEL.NUM_CLASSES = 0
-    backbone = build_model(cfg)
-    cfg.MODEL.NUM_CLASSES = num_class
-    if hasattr(backbone, "module"):
-        num_features = backbone.module.num_features
-    else:
-        num_features = backbone.num_features
-    classifier = Predictor(num_class=num_class, inc=num_features, temp=cfg.MME.TEMP)
-    classifier = classifier.cuda(device=torch.cuda.current_device())
-    models = [backbone, classifier]
+    cfg.SWIN.TEMP = cfg.MME.TEMP
+    cfg.SWIN.ETA = cfg.MME.LAMBDA
+    model = build_model(cfg)
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
-        misc.log_model_info(backbone, cfg, use_train_input=True)
+        misc.log_model_info(model, cfg, use_train_input=True)
 
     # Construct the optimizer.
+    if hasattr(model, "module"):
+        module = model.module
+    else:
+        module = model
+    sub_modules = []
+    for name, sub_module in module.named_modules():
+        if name!="head":
+            sub_modules.append(sub_module)
+    backbone = nn.Sequential(*sub_modules)
+    classifier = module.get_submodule("head")
     optimizer_f = optim.construct_optimizer(backbone, cfg)
-    optimizer_c = torch.optim.SGD(
-            [
-                {"params": classifier.parameters()},
-            ],
-            lr=cfg.SOLVER.BASE_LR,
-            momentum=cfg.SOLVER.MOMENTUM,
-            weight_decay=cfg.SOLVER.WEIGHT_DECAY,
-            dampening=cfg.SOLVER.DAMPENING,
-            nesterov=cfg.SOLVER.NESTEROV,
-    )
+    optimizer_c = optim.construct_optimizer(classifier, cfg)
     optimizers = [optimizer_f, optimizer_c]
     # Create a GradScaler for mixed precision training
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)
 
     # Load a checkpoint to resume training if applicable.
-    start_epoch = cu.load_train_checkpoint(cfg, backbone, None,
+    start_epoch = cu.load_train_checkpoint(cfg, model, None,
         scaler if cfg.TRAIN.MIXED_PRECISION else None)
 
     # Create the video train and val loaders.
@@ -589,7 +576,7 @@ def train(cfg):
         epoch_timer.epoch_tic()
         train_epoch(
             train_loaders, 
-            models, 
+            model, 
             optimizers, 
             scaler, 
             train_meter, 
@@ -626,21 +613,21 @@ def train(cfg):
         if (
             (is_checkp_epoch or is_eval_epoch)
             and cfg.BN.USE_PRECISE_STATS
-            and len(get_bn_modules(backbone)) > 0
+            and len(get_bn_modules(model)) > 0
         ):
             calculate_and_update_precise_bn(
                 precise_bn_loader,
-                backbone,
+                model,
                 min(cfg.BN.NUM_BATCHES_PRECISE, len(precise_bn_loader)),
                 cfg.NUM_GPUS > 0,
             )
-        _ = misc.aggregate_sub_bn_stats(backbone)
+        _ = misc.aggregate_sub_bn_stats(model)
 
         # Save a checkpoint.
         if is_checkp_epoch:
             cu.save_checkpoint(
                 cfg.OUTPUT_DIR, 
-                backbone, 
+                model, 
                 optimizer_f, 
                 cur_epoch, 
                 cfg,
@@ -650,7 +637,7 @@ def train(cfg):
         if is_eval_epoch:
             eval_epoch(
                 val_loader, 
-                models, 
+                model, 
                 val_meter, 
                 cur_epoch, 
                 cfg, 

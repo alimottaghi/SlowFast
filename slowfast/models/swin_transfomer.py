@@ -26,6 +26,21 @@ from .build import MODEL_REGISTRY
 #     print("[Warning] Fused window process have not been installed. Please refer to get_started.md for installation.")
 
 
+class GradientReverse(torch.autograd.Function):
+    scale = torch.tensor(1.0, requires_grad=False)
+    @staticmethod
+    def forward(ctx, x):
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return GradientReverse.scale * grad_output.neg()
+    
+def grad_reverse(x, scale=1.0):
+    GradientReverse.scale = scale
+    return GradientReverse.apply(x)
+
+
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
@@ -561,6 +576,7 @@ class SwinTransformer(nn.Module):
         self.extracting = cfg.EXTRACT.ENABLE
         self.few_shot = cfg.SWIN.FEW_SHOT
         self.temp = cfg.SWIN.TEMP
+        self.eta = cfg.SWIN.ETA
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
@@ -622,7 +638,7 @@ class SwinTransformer(nn.Module):
     def no_weight_decay_keywords(self):
         return {'relative_position_bias_table'}
 
-    def forward(self, x, extract=False):
+    def forward(self, x, extract=False, reverse=False):
         """Forward function."""
         if isinstance(x, list) and len(x) == 1:
             x = x[0]
@@ -639,6 +655,8 @@ class SwinTransformer(nn.Module):
         x = self.avgpool(x.transpose(1, 2))  # B C 1
         x = torch.flatten(x, 1)
         feats = torch.clone(x)
+        if reverse:
+            x = grad_reverse(x, self.eta)
         if self.few_shot:
             x = F.normalize(x)
             cls_score = self.head(x) / self.temp
