@@ -646,7 +646,7 @@ def train(cfg):
             cur_epoch, 
             cfg, 
             writer,
-            )
+        )
         epoch_timer.epoch_toc()
         logger.info(
             f"Epoch {cur_epoch} takes {epoch_timer.last_epoch_time():.2f}s. Epochs "

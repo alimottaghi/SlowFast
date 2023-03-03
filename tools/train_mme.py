@@ -28,45 +28,6 @@ from slowfast.utils.meters import EpochTimer, TrainMeter, ValMeter, AdaMeter
 logger = logging.get_logger(__name__)
 
 
-class GradientReverse(torch.autograd.Function):
-    scale = torch.tensor(1.0, requires_grad=False)
-    @staticmethod
-    def forward(ctx, x):
-        return x.view_as(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return GradientReverse.scale * grad_output.neg()
-    
-def grad_reverse(x, scale=1.0):
-    GradientReverse.scale = scale
-    return GradientReverse.apply(x)
-
-def adentropy(classifier, feat, lamda, eta=1.0):
-    logits = classifier(feat, reverse=True, eta=eta)
-    preds = F.softmax(logits, dim=1)
-    loss_adent = lamda * torch.mean(
-        torch.sum(preds * (torch.log(preds + 1e-5)), 1))
-    return loss_adent
-
-
-class Predictor(nn.Module):
-    def __init__(self, num_class=64, inc=4096, temp=0.05):
-        super(Predictor, self).__init__()
-
-        self.fc = nn.Linear(inc, num_class, bias=False)
-        self.num_class = num_class
-        self.inc = inc
-        self.temp = temp
-
-    def forward(self, x, reverse=False, eta=0.1):
-        if reverse:
-            x = grad_reverse(x, eta)
-        x = F.normalize(x)
-        x_out = self.fc(x) / self.temp
-        return x_out
-
-
 def train_epoch(
     train_loaders, 
     model, 
@@ -100,7 +61,6 @@ def train_epoch(
     
     # Enable train mode.
     model.train()
-
     train_meter.iter_tic()
     data_size = len(source_loader)
     target_unl_iter = iter(target_unl_loader)
@@ -215,7 +175,7 @@ def train_epoch(
         if writer is not None:
             dict2write = {
                 "Train/loss_s": loss_s,
-                "Train/loss_h": loss_h,
+                "Train/loss_h": -loss_h,
                 "Train/lr": lr,
                 "Train/Top1_err": top1_err,
                 "Train/Top5_err": top5_err,
@@ -235,23 +195,23 @@ def train_epoch(
                     tag="Confusion/Unlabeled", 
                     global_step=data_size * cur_epoch + cur_iter
                 )
-                all_lab_preds = torch.cat(train_meter.all_source_weak, dim=0)
-                all_lab_feats = torch.cat(train_meter.all_source_strong, dim=0)
-                all_unl_preds = torch.cat(train_meter.all_target_weak, dim=0)
-                all_unl_feats = torch.cat(train_meter.all_target_strong, dim=0)
-                all_lab_labels = torch.cat(train_meter.all_source_labels, dim=0)
-                all_unl_labels = torch.cat(train_meter.all_target_labels, dim=0)
+                # all_lab_preds = torch.cat(train_meter.all_source_weak, dim=0)
+                # all_lab_feats = torch.cat(train_meter.all_source_strong, dim=0)
+                # all_unl_preds = torch.cat(train_meter.all_target_weak, dim=0)
+                # all_unl_feats = torch.cat(train_meter.all_target_strong, dim=0)
+                # all_lab_labels = torch.cat(train_meter.all_source_labels, dim=0)
+                # all_unl_labels = torch.cat(train_meter.all_target_labels, dim=0)
 
-                dict2save = {
-                    "all_lab_preds": all_lab_preds.detach().cpu(),
-                    "all_lab_feats": all_lab_feats.detach().cpu(),
-                    "all_unl_preds": all_unl_preds.detach().cpu(),
-                    "all_unl_feats": all_unl_feats.detach().cpu(),
-                    "all_lab_labels": all_lab_labels.detach().cpu(),
-                    "all_unl_labels": all_unl_labels.detach().cpu(),
-                    "prototypes": prototypes.detach().cpu(),
-                }
-                np.save(cfg.OUTPUT_DIR + f'/step{data_size * cur_epoch + cur_iter}.npy', dict2save)
+                # dict2save = {
+                #     "all_lab_preds": all_lab_preds.detach().cpu(),
+                #     "all_lab_feats": all_lab_feats.detach().cpu(),
+                #     "all_unl_preds": all_unl_preds.detach().cpu(),
+                #     "all_unl_feats": all_unl_feats.detach().cpu(),
+                #     "all_lab_labels": all_lab_labels.detach().cpu(),
+                #     "all_unl_labels": all_unl_labels.detach().cpu(),
+                #     "prototypes": prototypes.detach().cpu(),
+                # }
+                # np.save(cfg.OUTPUT_DIR + f'/step{data_size * cur_epoch + cur_iter}.npy', dict2save)
 
             if cfg.TENSORBOARD.SAMPLE_VIS.ENABLE and (data_size * cur_epoch + cur_iter)%cfg.TENSORBOARD.SAMPLE_VIS.LOG_PERIOD==0:
                 writer.add_video_pred(
@@ -395,7 +355,7 @@ def eval_epoch(
                         global_step = len(val_loader) * cur_epoch + cur_iter,
                     )
 
-        val_meter.update_predictions(preds, labels)
+            val_meter.update_predictions(preds, labels)
 
         val_meter.log_iter_stats(cur_epoch, cur_iter)
         val_meter.iter_tic()
@@ -484,16 +444,12 @@ def train(cfg):
         misc.log_model_info(model, cfg, use_train_input=True)
 
     # Construct the optimizer.
-    if hasattr(model, "module"):
-        module = model.module
-    else:
-        module = model
     sub_modules = []
-    for name, sub_module in module.named_modules():
+    for name, sub_module in model.module.named_modules():
         if name!="head":
             sub_modules.append(sub_module)
     backbone = nn.Sequential(*sub_modules)
-    classifier = module.get_submodule("head")
+    classifier = model.module.get_submodule("head")
     optimizer_f = optim.construct_optimizer(backbone, cfg)
     optimizer_c = optim.construct_optimizer(classifier, cfg)
     optimizers = [optimizer_f, optimizer_c]
@@ -501,7 +457,7 @@ def train(cfg):
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)
 
     # Load a checkpoint to resume training if applicable.
-    start_epoch = cu.load_train_checkpoint(cfg, model, None,
+    start_epoch = cu.load_train_checkpoint(cfg, model, optimizer_f,
         scaler if cfg.TRAIN.MIXED_PRECISION else None)
 
     # Create the video train and val loaders.
@@ -642,7 +598,7 @@ def train(cfg):
                 cur_epoch, 
                 cfg, 
                 writer,
-        )
+            )
 
     if writer is not None:
         writer.close()
