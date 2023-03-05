@@ -140,7 +140,7 @@ def train_epoch(
             optimizer_f.step()
             optimizer_c.step()
 
-            prototypes = model.module.head.weight
+            prototypes = model.module.head.weight.clone().detach()
 
         # Compute the errors.
         num_topks_correct = metrics.topks_correct(lab_preds, lab_labels, (1, 5))
@@ -310,7 +310,7 @@ def eval_epoch(
                     meta[key] = val.cuda(non_blocking=True)
         val_meter.data_toc()
 
-        preds, feats = model(inputs)
+        preds, _ = model(inputs)
 
         if cfg.DATA.MULTI_LABEL:
             if cfg.NUM_GPUS > 1:
@@ -462,7 +462,7 @@ def train(cfg):
 
     # Create the video train and val loaders.
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-        source_cfg = copy.deepcopy(cfg) 
+        source_cfg = copy.deepcopy(cfg)
         source_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
         source_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
         source_loader = loader.construct_loader(source_cfg, "train")
@@ -470,14 +470,14 @@ def train(cfg):
         target_lab_cfg = copy.deepcopy(cfg)
         target_lab_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_lab_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_lab_cfg.TRAIN.BATCH_SIZE = source_cfg.TRAIN.BATCH_SIZE
+        target_lab_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.ALPHA * source_cfg.TRAIN.BATCH_SIZE)
         target_lab_loader = loader.construct_loader(target_lab_cfg, "lab")
-        target_unl_cfg = copy.deepcopy(cfg) 
+        target_unl_cfg = copy.deepcopy(cfg)
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_unl_cfg.TRAIN.BATCH_SIZE = cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE
+        target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "unl")
-        bn_cfg = copy.deepcopy(cfg) 
+        bn_cfg = copy.deepcopy(cfg)
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
         bn_cfg.ADAMATCH.ENABLE = False
         precise_bn_loader = (
@@ -487,17 +487,17 @@ def train(cfg):
         )
         train_loaders = [source_loader, target_unl_loader, target_lab_loader]
     else:
-        source_cfg = copy.deepcopy(cfg) 
+        source_cfg = copy.deepcopy(cfg)
         source_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
         source_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
         source_loader = loader.construct_loader(source_cfg, "train")
         val_loader = loader.construct_loader(source_cfg, "val")
-        target_unl_cfg = copy.deepcopy(cfg) 
+        target_unl_cfg = copy.deepcopy(cfg)
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_unl_cfg.TRAIN.BATCH_SIZE = cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE
+        target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "train")
-        bn_cfg = copy.deepcopy(cfg) 
+        bn_cfg = copy.deepcopy(cfg)
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
         bn_cfg.ADAMATCH.ENABLE = False
         precise_bn_loader = (

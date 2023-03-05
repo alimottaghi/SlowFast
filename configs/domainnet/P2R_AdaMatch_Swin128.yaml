@@ -1,7 +1,7 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 64
+  BATCH_SIZE: 80
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
@@ -82,7 +82,8 @@ ADAPTATION:
   ADAPTATION_TYPE: 'AdaMatch'
   SOURCE: ['painting']
   TARGET: ['real']
-  BETA: 1
+  ALPHA: 0.1
+  BETA: 1.0
   SEMI_SUPERVISED:
     ENABLE: False
     NUM_SHOTS: 3

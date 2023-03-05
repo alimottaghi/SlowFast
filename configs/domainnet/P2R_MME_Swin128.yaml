@@ -84,7 +84,8 @@ ADAPTATION:
   ADAPTATION_TYPE: 'MME'
   SOURCE: ['painting']
   TARGET: ['real']
-  BETA: 1
+  ALPHA: 0.125
+  BETA: 1.0
   SEMI_SUPERVISED:
     ENABLE: False
     NUM_SHOTS: 3

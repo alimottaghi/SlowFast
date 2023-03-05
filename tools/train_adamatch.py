@@ -97,8 +97,6 @@ def train_epoch(
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
         optim.set_lr(optimizer, lr)
         mu = (0.5 + math.cos(math.pi * (cfg.SOLVER.MAX_EPOCH - cur_epoch - float(cur_iter) / data_size) / cfg.SOLVER.MAX_EPOCH) / 2)
-        # mu = cfg.ADAMATCH.MU * (0.5 - math.cos(min(math.pi, 2 * math.pi * (cur_epoch + \
-            # + float(cur_iter) / data_size) / cfg.SOLVER.MAX_EPOCH)) / 2)
 
         # Generate alignment for predictions
         if cfg.ADAMATCH.ALIGNMENT.ENABLE and len(train_meter.all_lab_preds) > 10:
@@ -182,16 +180,19 @@ def train_epoch(
             mask = pred_mask * sampling_mask
 
             # Compute the loss.
-            loss_s = loss_fun(logits_sls, labels_source)
+            if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
+                logits_labeled = torch.cat((logits_sls, logits_tls), dim=0)
+                labels_labeled = torch.cat((labels_source, labels_target_lab), dim=0)
+            else:
+                logits_labeled = logits_sls
+                labels_labeled = labels_source
+            loss_s = loss_fun(logits_labeled, labels_labeled)
             loss_t = loss_fun_none(logits_tus, pseudo_labels)
             loss_t = (mask * loss_t).mean(dim=0)
             loss = loss_s + cfg.ADAMATCH.MU * mu * loss_t
-            if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-                loss_t_lab = loss_fun(logits_tls, labels_target_lab)
-                loss += loss_t_lab
 
         # check Nan Loss.
-        # misc.check_nan_losses(loss)
+        misc.check_nan_losses(loss)
         scaler.scale(loss).backward()
         # Unscales the gradients of optimizer's assigned params in-place
         scaler.unscale_(optimizer)
@@ -246,9 +247,9 @@ def train_epoch(
         )
 
         batch_size = inputs_source[0].size(0)*max(cfg.NUM_GPUS, 1)
-        pred_mask_mis = (1 - num_pred_mask / batch_size) * 100.0
-        sampling_mask_mis = (1 - num_sampling_mask / batch_size) * 100.0
-        pseudo_mis = (1 - num_pseudo / batch_size) * 100.0
+        pred_mask_mis = (1 - num_pred_mask / (batch_size * cfg.ADAPTATION.BETA)) * 100.0
+        sampling_mask_mis = (1 - num_sampling_mask / (batch_size * cfg.ADAPTATION.BETA)) * 100.0
+        pseudo_mis = (1 - num_pseudo / (batch_size * cfg.ADAPTATION.BETA)) * 100.0
         pseudo_err = (1 - num_correct / num_pseudo) * 100.0 if num_pseudo > 0 else None
 
         # Update and log stats.
@@ -273,7 +274,7 @@ def train_epoch(
                 "Ada/pred_mask_mis": pred_mask_mis,
                 "Ada/sampling_mask_mis": sampling_mask_mis,
                 "Ada/pseudo_mis": pseudo_mis,
-                "Ada/threshold_avg": mean_tau,
+                "Ada/tau": mean_tau,
             }
             if pseudo_err is not None:
                 dict2write["Ada/pseudo_err"] = pseudo_err
@@ -577,12 +578,12 @@ def train(cfg):
         target_lab_cfg = copy.deepcopy(cfg)
         target_lab_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_lab_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_lab_cfg.TRAIN.BATCH_SIZE = source_cfg.TRAIN.BATCH_SIZE
+        target_lab_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.ALPHA * source_cfg.TRAIN.BATCH_SIZE)
         target_lab_loader = loader.construct_loader(target_lab_cfg, "lab")
         target_unl_cfg = copy.deepcopy(cfg) 
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_unl_cfg.TRAIN.BATCH_SIZE = cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE
+        target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "unl")
         bn_cfg = copy.deepcopy(cfg) 
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
@@ -602,7 +603,7 @@ def train(cfg):
         target_unl_cfg = copy.deepcopy(cfg) 
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_unl_cfg.TRAIN.BATCH_SIZE = cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE
+        target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "train")
         bn_cfg = copy.deepcopy(cfg) 
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 

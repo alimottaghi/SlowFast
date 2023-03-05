@@ -5,6 +5,7 @@
 
 import math
 import copy
+from collections import OrderedDict
 import numpy as np
 import pprint
 import torch
@@ -38,14 +39,13 @@ def get_distances(X, Y, dist_type="cosine"):
 
 def train_epoch(
     train_loaders, 
-    model, 
-    optimizer, 
+    models, 
+    optimizers, 
     scaler, 
     train_meter, 
     cur_epoch, 
     cfg, 
-    writer=None,
-    model_momentum=None,
+    writer=None
 ):
     """
     Perform the video training for one epoch.
@@ -65,11 +65,12 @@ def train_epoch(
     target_unl_loader = train_loaders[1]
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
         target_lab_loader = train_loaders[2]
+
+    model, model_momentum = models[0], models[1]
+    optimizer_f, optimizer_c = optimizers[0], optimizers[1]
     
     # Enable train mode.
     model.train()
-    if model_momentum is None:
-        model_momentum = copy.deepcopy(model)
     model_momentum.eval()
 
     train_meter.iter_tic()
@@ -78,7 +79,7 @@ def train_epoch(
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
         target_lab_iter = iter(target_lab_loader)
 
-    # Explicitly declare reduction to mean.
+    # Loss functions needed.
     loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
     loss_fun_none = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="none")
 
@@ -108,7 +109,8 @@ def train_epoch(
 
         # Update the learning rate and mu.
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
-        optim.set_lr(optimizer, lr)
+        optim.set_lr(optimizer_f, lr)
+        optim.set_lr(optimizer_c, lr)
         mu = (0.5 + math.cos(math.pi * (cfg.SOLVER.MAX_EPOCH - cur_epoch - float(cur_iter) / data_size) / cfg.SOLVER.MAX_EPOCH) / 2)
 
         # Load bank.
@@ -188,7 +190,8 @@ def train_epoch(
 
         with torch.cuda.amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
             # Forward pass.
-            optimizer.zero_grad()
+            optimizer_f.zero_grad()
+            optimizer_c.zero_grad()
 
             # Compute the predictions.
             logists_strong, feats_strong = model([inputs_strong])
@@ -231,24 +234,7 @@ def train_epoch(
             if cfg.ADAEMBED.PSEUDO_TYPE=='AdaMatch':
                 preds_tuw_refined = F.normalize(alignment * preds_tuw, p=1, dim=1)
                 pseudo_labels = torch.argmax(preds_tuw_refined, dim=1)
-                thresholding_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
-                sampling_mask = torch.bernoulli(p_sample[pseudo_labels]) > 0
-            elif cfg.ADAEMBED.PSEUDO_TYPE=='AdaContrast':
-                mem_feat = F.normalize(feats_bank, dim=1)
-                mem_probs = F.softmax(probs_bank, dim=1)
-                k_feats = F.normalize(feats_tuw, dim=1)
-                distances = get_distances(k_feats, mem_feat)
-                refined_probs = []
-                for i in range(len(k_feats)):
-                    dists = distances[i, :]
-                    _, idxs = dists.sort()
-                    idxs = idxs[:cfg.ADAEMBED.NUM_NEIGHBORS]
-                    probs = mem_probs[idxs, :].mean(0)
-                    refined_probs.append(probs)
-                refined_probs = torch.stack(refined_probs)
-                preds_tuw_refined = F.normalize(alignment * refined_probs, p=1, dim=1)
-                pseudo_labels = torch.argmax(preds_tuw_refined, dim=1)
-                thresholding_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
+                pred_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
                 sampling_mask = torch.bernoulli(p_sample[pseudo_labels]) > 0
             elif cfg.ADAEMBED.PSEUDO_TYPE=='AdaEmbed':
                 mem_feat = F.normalize(feats_bank, dim=1)
@@ -265,7 +251,7 @@ def train_epoch(
                 refined_probs = torch.stack(refined_probs)
                 preds_tuw_refined = F.normalize(alignment * refined_probs, p=1, dim=1)
                 pseudo_labels = torch.argmax(preds_tuw_refined, dim=1)
-                thresholding_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
+                pred_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
                 sampling_mask = torch.zeros_like(pseudo_labels).bool()
                 proto_distances = get_distances(prototypes, k_feats)
                 max_dist = []
@@ -283,68 +269,80 @@ def train_epoch(
             else:
                 preds_tuw_refined = preds_tuw
                 pseudo_labels = torch.argmax(preds_tuw_refined, dim=1)
-                thresholding_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
+                pred_mask = preds_tuw_refined.max(dim=1)[0] >= c_tau[pseudo_labels]
                 sampling_mask = torch.bernoulli(p_sample[pseudo_labels]) > 0
-            mask = thresholding_mask * sampling_mask
+            mask = pred_mask * sampling_mask
             loss_t = loss_fun_none(logits_tus, pseudo_labels)
             loss_t = (mask * loss_t).mean(dim=0)
 
             # Prototype loss
-            q = F.normalize(lab_feats_strong, dim=1)
-            k = prototypes[lab_labels]
-            l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
-            l_neg = torch.einsum("nc,ck->nk", [q, prototypes.T])
-            logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
-            labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
-            mask_ins = torch.ones_like(logits_ins, dtype=torch.bool)
-            mask_ins[:, 1:] = lab_labels.reshape(-1, 1) != torch.arange(cfg.MODEL.NUM_CLASSES).cuda()  # (B, K)
-            logits_ins = torch.where(mask_ins, logits_ins, torch.tensor([float("-inf")]).cuda())
-            loss_p = F.cross_entropy(logits_ins, labels_ins)
+            if cfg.ADAEMBED.LAMBDA_P > 0:
+                q = F.normalize(lab_feats_strong, dim=1)
+                k = prototypes[lab_labels]
+                l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
+                l_neg = torch.einsum("nc,ck->nk", [q, prototypes.T])
+                logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
+                labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
+                mask_ins = torch.ones_like(logits_ins, dtype=torch.bool)
+                mask_ins[:, 1:] = lab_labels.reshape(-1, 1) != torch.arange(cfg.MODEL.NUM_CLASSES).cuda()  # (B, K)
+                logits_ins = torch.where(mask_ins, logits_ins, torch.tensor([float("-inf")]).cuda())
+                loss_p = F.cross_entropy(logits_ins, labels_ins)
+            else:
+                loss_p = torch.zeros_like(loss_s)
 
             # Contrastive loss
-            q = F.normalize(feats_tus, dim=1)
-            k = F.normalize(feats_tuw, dim=1)
-            mem_feat = F.normalize(unl_feats_bank, dim=1)
-            mem_label = torch.argmax(unl_probs_bank, dim=1)
-            l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
-            l_neg = torch.einsum("nc,ck->nk", [q, mem_feat.T])
-            logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
-            labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
-            mask_ins = torch.ones_like(logits_ins, dtype=torch.bool)
-            mask_ins[:, 1:] = pseudo_labels.reshape(-1, 1) != mem_label  # (B, K)
-            logits_ins = torch.where(mask_ins, logits_ins, torch.tensor([float("-inf")]).cuda())
-            loss_c = F.cross_entropy(logits_ins, labels_ins)
+            if cfg.ADAEMBED.LAMBDA_C > 0:
+                q = F.normalize(feats_tus, dim=1)
+                k = F.normalize(feats_tuw, dim=1)
+                mem_feat = F.normalize(unl_feats_bank, dim=1)
+                mem_label = torch.argmax(unl_probs_bank, dim=1)
+                l_pos = torch.einsum("nc,nc->n", [q, k]).unsqueeze(-1)
+                l_neg = torch.einsum("nc,ck->nk", [q, mem_feat.T])
+                logits_ins = torch.cat([l_pos, l_neg], dim=1) / cfg.ADAEMBED.TEMP
+                labels_ins = torch.zeros(logits_ins.shape[0], dtype=torch.long).cuda()
+                mask_ins = torch.ones_like(logits_ins, dtype=torch.bool)
+                mask_ins[:, 1:] = pseudo_labels.reshape(-1, 1) != mem_label  # (B, K)
+                logits_ins = torch.where(mask_ins, logits_ins, torch.tensor([float("-inf")]).cuda())
+                loss_c = F.cross_entropy(logits_ins, labels_ins)
+            else:
+                loss_c = torch.zeros_like(loss_s)
 
             loss = loss_s + cfg.ADAEMBED.LAMBDA_T * mu * loss_t + \
                 + cfg.ADAEMBED.LAMBDA_P * mu * loss_p + cfg.ADAEMBED.LAMBDA_C * mu * loss_c
+            loss.backward()
+            optimizer_f.step()
+            optimizer_c.step()
 
-        # check Nan Loss.
-        misc.check_nan_losses(loss)
-        scaler.scale(loss).backward()
-        # Unscales the gradients of optimizer's assigned params in-place
-        scaler.unscale_(optimizer)
-        # Clip gradients if necessary
-        if cfg.SOLVER.CLIP_GRAD_VAL:
-            torch.nn.utils.clip_grad_value_(
-                model.parameters(), cfg.SOLVER.CLIP_GRAD_VAL
-            )
-        elif cfg.SOLVER.CLIP_GRAD_L2NORM:
-            torch.nn.utils.clip_grad_norm_(
-                model.parameters(), cfg.SOLVER.CLIP_GRAD_L2NORM
-            )
-        # Update the parameters.
-        scaler.step(optimizer)
-        scaler.update()
+            # Train classifier to maximize discrepancy.
+            optimizer_f.zero_grad()
+            optimizer_c.zero_grad()
 
-        for param_q, param_k in zip(model.parameters(), model_momentum.parameters()):
-            param_k.data = param_k.data * cfg.ADAEMBED.M + param_q.data * (1.0 - cfg.ADAEMBED.M)
+            unl_preds_rev, _ = model([target_unl_weak], reverse=True)
+            new_preds = F.softmax(unl_preds_rev, dim=1)
+            loss_h = cfg.ADAEMBED.LAMBDA_H * torch.mean(
+                torch.sum(new_preds * (torch.log(new_preds + 1e-5)), 1))
+            loss_h.backward()
+            optimizer_f.step()
+            optimizer_c.step()
+
+        # Update the momentum encoder.
+        model_params = OrderedDict(model.named_parameters())
+        momentum_params = OrderedDict(model_momentum.named_parameters())
+        model_buffers = OrderedDict(model.named_buffers())
+        momentum_buffers = OrderedDict(model_momentum.named_buffers())
+        assert model_params.keys() == momentum_params.keys()
+        assert model_buffers.keys() == momentum_buffers.keys()
+        for name, param in model_params.items():
+            momentum_params[name].sub_((1.0 - cfg.ADAEMBED.EMA) * (momentum_params[name] - param))
+        for name, buffer in model_buffers.items():
+            momentum_buffers[name].copy_(buffer)
 
         # Compute the errors.
         num_topks_correct = metrics.topks_correct(logits_sls, labels_source, (1, 5))
         top1_err, top5_err = [
             (1.0 - x / logits_sls.size(0)) * 100.0 for x in num_topks_correct
         ]
-        num_thresholding_mask = torch.sum(thresholding_mask)
+        num_pred_mask = torch.sum(pred_mask)
         num_sampling_mask = torch.sum(sampling_mask)
         num_pseudo = torch.sum(mask)
         num_correct = torch.sum(pseudo_labels[mask]==labels_target_unl[mask])
@@ -352,26 +350,27 @@ def train_epoch(
         
         # Gather all the predictions across all the devices.
         if cfg.NUM_GPUS > 1:
-            loss, loss_s, loss_t, loss_p, loss_c, top1_err, top5_err = du.all_reduce(
-                [loss.detach(), loss_s, loss_t, loss_p, loss_c, top1_err, top5_err]
+            loss, loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err = du.all_reduce(
+                [loss.detach(), loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err]
             )
-            num_thresholding_mask, num_sampling_mask, num_pseudo, num_correct = du.all_reduce(
-                [num_thresholding_mask, num_sampling_mask, num_pseudo, num_correct], 
+            num_pred_mask, num_sampling_mask, num_pseudo, num_correct = du.all_reduce(
+                [num_pred_mask, num_sampling_mask, num_pseudo, num_correct], 
                 average=False,
             )
 
         # Copy the stats from GPU to CPU (sync point).
-        loss, loss_s, loss_t, loss_p, loss_c, top1_err, top5_err = (
+        loss, loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err = (
             loss.item(),
             loss_s.item(), 
             loss_t.item(),
             loss_p.item(), 
             loss_c.item(),
+            loss_h.item(),
             top1_err.item(),
             top5_err.item()
         )
-        num_thresholding_mask, num_sampling_mask, num_pseudo, num_correct, mean_tau = (
-            num_thresholding_mask.item(), 
+        num_pred_mask, num_sampling_mask, num_pseudo, num_correct, mean_tau = (
+            num_pred_mask.item(), 
             num_sampling_mask.item(),
             num_pseudo.item(), 
             num_correct.item(),
@@ -379,9 +378,9 @@ def train_epoch(
         )
 
         batch_size = inputs_source[0].size(0)*max(cfg.NUM_GPUS, 1)
-        thresholding_mask_mis = (1 - num_thresholding_mask / batch_size) * 100.0
-        sampling_mask_mis = (1 - num_sampling_mask / batch_size) * 100.0
-        pseudo_mis = (1 - num_pseudo / batch_size) * 100.0
+        pred_mask_mis = (1 - num_pred_mask / (batch_size * cfg.ADAPTATION.BETA)) * 100.0
+        sampling_mask_mis = (1 - num_sampling_mask / (batch_size * cfg.ADAPTATION.BETA)) * 100.0
+        pseudo_mis = (1 - num_pseudo / (batch_size * cfg.ADAPTATION.BETA)) * 100.0
         pseudo_err = (1 - num_correct / num_pseudo) * 100.0 if num_pseudo > 0 else None
 
         # Update and log stats.
@@ -401,14 +400,15 @@ def train_epoch(
                 "Train/loss_t": loss_t,
                 "Train/loss_p": loss_p,
                 "Train/loss_c": loss_c,
+                "Train/loss_h": -loss_h,
                 "Train/lr": lr,
                 "Train/Top1_err": top1_err,
                 "Train/Top5_err": top5_err,
                 "Ada/mu": mu, 
-                "Ada/thresholding_mask_mis": thresholding_mask_mis,
+                "Ada/pred_mask_mis": pred_mask_mis,
                 "Ada/sampling_mask_mis": sampling_mask_mis,
                 "Ada/pseudo_mis": pseudo_mis,
-                "Ada/threshold_avg": mean_tau,
+                "Ada/tau": mean_tau,
             }
             if pseudo_err is not None:
                 dict2write["Ada/pseudo_err"] = pseudo_err
@@ -707,23 +707,36 @@ def train(cfg):
 
     # Build the video model and print model statistics.
     cfg.EXTRACT.ENABLE = True
+    cfg.SWIN.TEMP = cfg.ADAEMBED.TEMP
+    cfg.SWIN.ETA = cfg.ADAEMBED.LAMBDA_H
     model = build_model(cfg)
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)
     model_momentum = copy.deepcopy(model)
+    for param in model_momentum.parameters():
+        param.requires_grad = False
+    models = [model, model_momentum]
 
     # Construct the optimizer.
-    optimizer = optim.construct_optimizer(model, cfg)
+    sub_modules = []
+    for name, sub_module in model.module.named_modules():
+        if name!="head":
+            sub_modules.append(sub_module)
+    backbone = nn.Sequential(*sub_modules)
+    classifier = model.module.get_submodule("head")
+    optimizer_f = optim.construct_optimizer(backbone, cfg)
+    optimizer_c = optim.construct_optimizer(classifier, cfg)
+    optimizers = [optimizer_f, optimizer_c]
     # Create a GradScaler for mixed precision training
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)
 
     # Load a checkpoint to resume training if applicable.
-    start_epoch = cu.load_train_checkpoint(cfg, model, optimizer,
+    start_epoch = cu.load_train_checkpoint(cfg, model, optimizer_f,
         scaler if cfg.TRAIN.MIXED_PRECISION else None)
 
     # Create the video train and val loaders.
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-        source_cfg = copy.deepcopy(cfg) 
+        source_cfg = copy.deepcopy(cfg)
         source_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
         source_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
         source_loader = loader.construct_loader(source_cfg, "train")
@@ -731,14 +744,14 @@ def train(cfg):
         target_lab_cfg = copy.deepcopy(cfg)
         target_lab_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_lab_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_lab_cfg.TRAIN.BATCH_SIZE = source_cfg.TRAIN.BATCH_SIZE
+        target_lab_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.ALPHA * source_cfg.TRAIN.BATCH_SIZE)
         target_lab_loader = loader.construct_loader(target_lab_cfg, "lab")
-        target_unl_cfg = copy.deepcopy(cfg) 
+        target_unl_cfg = copy.deepcopy(cfg)
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_unl_cfg.TRAIN.BATCH_SIZE = cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE
+        target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "unl")
-        bn_cfg = copy.deepcopy(cfg) 
+        bn_cfg = copy.deepcopy(cfg)
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
         bn_cfg.ADAMATCH.ENABLE = False
         precise_bn_loader = (
@@ -748,17 +761,17 @@ def train(cfg):
         )
         train_loaders = [source_loader, target_unl_loader, target_lab_loader]
     else:
-        source_cfg = copy.deepcopy(cfg) 
+        source_cfg = copy.deepcopy(cfg)
         source_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
         source_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
         source_loader = loader.construct_loader(source_cfg, "train")
         val_loader = loader.construct_loader(source_cfg, "val")
-        target_unl_cfg = copy.deepcopy(cfg) 
+        target_unl_cfg = copy.deepcopy(cfg)
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
-        target_unl_cfg.TRAIN.BATCH_SIZE = cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE
+        target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "train")
-        bn_cfg = copy.deepcopy(cfg) 
+        bn_cfg = copy.deepcopy(cfg)
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
         bn_cfg.ADAMATCH.ENABLE = False
         precise_bn_loader = (
@@ -793,15 +806,14 @@ def train(cfg):
         epoch_timer.epoch_tic()
         train_epoch(
             train_loaders, 
-            model, 
-            optimizer, 
+            models, 
+            optimizers, 
             scaler, 
             train_meter, 
             cur_epoch, 
             cfg, 
-            writer,
-            model_momentum,
-            )
+            writer
+        )
         epoch_timer.epoch_toc()
         logger.info(
             f"Epoch {cur_epoch} takes {epoch_timer.last_epoch_time():.2f}s. Epochs "
@@ -846,7 +858,7 @@ def train(cfg):
             cu.save_checkpoint(
                 cfg.OUTPUT_DIR, 
                 model, 
-                optimizer, 
+                optimizer_f, 
                 cur_epoch, 
                 cfg,
                 scaler if cfg.TRAIN.MIXED_PRECISION else None,
@@ -855,7 +867,7 @@ def train(cfg):
         if is_eval_epoch:
             eval_epoch(
                 val_loader, 
-                model, 
+                model_momentum, 
                 val_meter, 
                 cur_epoch, 
                 cfg, 
