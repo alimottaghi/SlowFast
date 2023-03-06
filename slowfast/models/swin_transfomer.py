@@ -26,19 +26,36 @@ from .build import MODEL_REGISTRY
 #     print("[Warning] Fused window process have not been installed. Please refer to get_started.md for installation.")
 
 
-class GradientReverse(torch.autograd.Function):
-    scale = torch.tensor(1.0, requires_grad=False)
+class _ReverseGrad(torch.autograd.Function):
+
     @staticmethod
-    def forward(ctx, x):
-        return x.view_as(x)
+    def forward(ctx, input, grad_scaling):
+        ctx.grad_scaling = grad_scaling
+        return input.view_as(input)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return GradientReverse.scale * grad_output.neg()
-    
-def grad_reverse(x, scale=1.0):
-    GradientReverse.scale = scale
-    return GradientReverse.apply(x)
+        grad_scaling = ctx.grad_scaling
+        return -grad_scaling * grad_output, None
+
+
+reverse_grad = _ReverseGrad.apply
+
+
+class ReverseGrad(nn.Module):
+    """Gradient reversal layer.
+
+    It acts as an identity layer in the forward,
+    but reverses the sign of the gradient in
+    the backward.
+    """
+
+    def forward(self, x, grad_scaling=1.0):
+        assert (grad_scaling >=
+                0), "grad_scaling must be non-negative, " "but got {}".format(
+                    grad_scaling
+                )
+        return reverse_grad(x, grad_scaling)
 
 
 class Mlp(nn.Module):
@@ -618,6 +635,7 @@ class SwinTransformer(nn.Module):
         self.norm = self.norm_layer(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.head = nn.Linear(self.num_features, self.num_classes, bias=not self.few_shot) if self.num_classes > 0 else nn.Identity()
+        self.revgrad = ReverseGrad()
 
         self.apply(self._init_weights)
 
@@ -656,7 +674,7 @@ class SwinTransformer(nn.Module):
         x = torch.flatten(x, 1)
         feats = torch.clone(x)
         if reverse:
-            x = grad_reverse(x, self.eta)
+            x = self.revgrad(x)
         if self.few_shot:
             x = F.normalize(x)
             cls_score = self.head(x) / self.temp

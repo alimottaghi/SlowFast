@@ -25,19 +25,36 @@ from operator import mul
 from einops import rearrange
 
 
-class GradientReverse(torch.autograd.Function):
-    scale = torch.tensor(1.0, requires_grad=False)
+class _ReverseGrad(torch.autograd.Function):
+
     @staticmethod
-    def forward(ctx, x):
-        return x.view_as(x)
+    def forward(ctx, input, grad_scaling):
+        ctx.grad_scaling = grad_scaling
+        return input.view_as(input)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return GradientReverse.scale * grad_output.neg()
-    
-def grad_reverse(x, scale=1.0):
-    GradientReverse.scale = scale
-    return GradientReverse.apply(x)
+        grad_scaling = ctx.grad_scaling
+        return -grad_scaling * grad_output, None
+
+
+reverse_grad = _ReverseGrad.apply
+
+
+class ReverseGrad(nn.Module):
+    """Gradient reversal layer.
+
+    It acts as an identity layer in the forward,
+    but reverses the sign of the gradient in
+    the backward.
+    """
+
+    def forward(self, x, grad_scaling=1.0):
+        assert (grad_scaling >=
+                0), "grad_scaling must be non-negative, " "but got {}".format(
+                    grad_scaling
+                )
+        return reverse_grad(x, grad_scaling)
 
 
 class Mlp(nn.Module):
@@ -600,6 +617,8 @@ class SwinTransformer3D(nn.Module):
         else:
             self.dropout = None
         self.head = nn.Linear(self.num_features, cfg.MODEL.NUM_CLASSES, bias=not self.few_shot) if cfg.MODEL.NUM_CLASSES > 0 else nn.Identity()
+        self.revgrad = ReverseGrad()
+
         self.init_weights()
         
         # Freeze the patch embed layer.
@@ -726,7 +745,7 @@ class SwinTransformer3D(nn.Module):
             x = self.avg_pool(x)
         feats = torch.clone(x)
         if reverse:
-            x = grad_reverse(x, self.eta)
+            x = self.revgrad(x)
         if self.dropout is not None:
             x = self.dropout(x)
         x = x.view(int(x.shape[0]), -1)

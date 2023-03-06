@@ -71,7 +71,7 @@ def train_epoch(
     
     # Enable train mode.
     model.train()
-    model_momentum.eval()
+    model_momentum.train()
 
     train_meter.iter_tic()
     data_size = len(source_loader)
@@ -326,16 +326,18 @@ def train_epoch(
             optimizer_c.step()
 
         # Update the momentum encoder.
-        model_params = OrderedDict(model.named_parameters())
-        momentum_params = OrderedDict(model_momentum.named_parameters())
-        model_buffers = OrderedDict(model.named_buffers())
-        momentum_buffers = OrderedDict(model_momentum.named_buffers())
-        assert model_params.keys() == momentum_params.keys()
-        assert model_buffers.keys() == momentum_buffers.keys()
-        for name, param in model_params.items():
-            momentum_params[name].sub_((1.0 - cfg.ADAEMBED.EMA) * (momentum_params[name] - param))
-        for name, buffer in model_buffers.items():
-            momentum_buffers[name].copy_(buffer)
+        for ema_param, param in zip(model_momentum.parameters(), model.parameters()):
+            ema_param.data.mul_(cfg.ADAEMBED.EMA).add_(param.data, alpha=1-cfg.ADAEMBED.EMA)
+        # model_params = OrderedDict(model.named_parameters())
+        # momentum_params = OrderedDict(model_momentum.named_parameters())
+        # model_buffers = OrderedDict(model.named_buffers())
+        # momentum_buffers = OrderedDict(model_momentum.named_buffers())
+        # assert model_params.keys() == momentum_params.keys()
+        # assert model_buffers.keys() == momentum_buffers.keys()
+        # for name, param in model_params.items():
+        #     momentum_params[name].sub_((1.0 - cfg.ADAEMBED.EMA) * (momentum_params[name] - param))
+        # for name, buffer in model_buffers.items():
+        #     momentum_buffers[name].copy_(buffer)
 
         # Compute the errors.
         num_topks_correct = metrics.topks_correct(logits_sls, labels_source, (1, 5))
