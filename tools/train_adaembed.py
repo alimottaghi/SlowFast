@@ -71,7 +71,7 @@ def train_epoch(
     
     # Enable train mode.
     model.train()
-    model_momentum.train()
+    model_momentum.eval()
 
     train_meter.iter_tic()
     data_size = len(source_loader)
@@ -319,7 +319,7 @@ def train_epoch(
 
             unl_preds_rev, _ = model([target_unl_weak], reverse=True)
             new_preds = F.softmax(unl_preds_rev, dim=1)
-            loss_h = cfg.ADAEMBED.LAMBDA_H * torch.mean(
+            loss_h = cfg.ADAEMBED.LAMBDA_H * mu * torch.mean(
                 torch.sum(new_preds * (torch.log(new_preds + 1e-5)), 1))
             loss_h.backward()
             optimizer_f.step()
