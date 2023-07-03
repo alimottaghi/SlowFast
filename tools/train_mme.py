@@ -56,7 +56,6 @@ def train_epoch(
     target_unl_loader = train_loaders[1]
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
         target_lab_loader = train_loaders[2]
-
     optimizer_f, optimizer_c = optimizers[0], optimizers[1]
     
     # Enable train mode.
@@ -134,7 +133,7 @@ def train_epoch(
 
             unl_preds, unl_feats = model(unl_inputs, reverse=True)
             new_preds = F.softmax(unl_preds, dim=1)
-            loss_h = cfg.ADAEMBED.LAMBDA * torch.mean(
+            loss_h = cfg.MME.LAMBDA * torch.mean(
                 torch.sum(new_preds * (torch.log(new_preds + 1e-5)), 1))
             loss_h.backward()
             optimizer_f.step()
@@ -195,23 +194,6 @@ def train_epoch(
                     tag="Confusion/Unlabeled", 
                     global_step=data_size * cur_epoch + cur_iter
                 )
-                # all_lab_preds = torch.cat(train_meter.all_source_weak, dim=0)
-                # all_lab_feats = torch.cat(train_meter.all_source_strong, dim=0)
-                # all_unl_preds = torch.cat(train_meter.all_target_weak, dim=0)
-                # all_unl_feats = torch.cat(train_meter.all_target_strong, dim=0)
-                # all_lab_labels = torch.cat(train_meter.all_source_labels, dim=0)
-                # all_unl_labels = torch.cat(train_meter.all_target_labels, dim=0)
-
-                # dict2save = {
-                #     "all_lab_preds": all_lab_preds.detach().cpu(),
-                #     "all_lab_feats": all_lab_feats.detach().cpu(),
-                #     "all_unl_preds": all_unl_preds.detach().cpu(),
-                #     "all_unl_feats": all_unl_feats.detach().cpu(),
-                #     "all_lab_labels": all_lab_labels.detach().cpu(),
-                #     "all_unl_labels": all_unl_labels.detach().cpu(),
-                #     "prototypes": prototypes.detach().cpu(),
-                # }
-                # np.save(cfg.OUTPUT_DIR + f'/step{data_size * cur_epoch + cur_iter}.npy', dict2save)
 
             if cfg.TENSORBOARD.SAMPLE_VIS.ENABLE and (data_size * cur_epoch + cur_iter)%cfg.TENSORBOARD.SAMPLE_VIS.LOG_PERIOD==0:
                 writer.add_video_pred(
@@ -237,10 +219,9 @@ def train_epoch(
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         torch.cuda.synchronize()
         train_meter.iter_tic()
-        del inputs_source
-        del inputs_target_unl
+        del inputs_source, inputs_target_unl, labels_source, labels_target_unl
         if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-            del inputs_target_lab
+            del inputs_target_lab, labels_target_lab
 
         # in case of fragmented memory
         torch.cuda.empty_cache()

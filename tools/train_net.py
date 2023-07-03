@@ -8,6 +8,7 @@ import copy
 import numpy as np
 import pprint
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
 
@@ -30,7 +31,14 @@ logger = logging.get_logger(__name__)
 
 
 def train_epoch(
-    train_loader, model, optimizer, scaler, train_meter, cur_epoch, cfg, writer=None
+    train_loader, 
+    model, 
+    optimizer, 
+    scaler, 
+    train_meter, 
+    cur_epoch, 
+    cfg, 
+    writer=None,
 ):
     """
     Perform the video training for one epoch.
@@ -61,13 +69,7 @@ def train_epoch(
             num_classes=cfg.MODEL.NUM_CLASSES,
         )
 
-    if hasattr(cfg.SOLVER, "EPOCH_ITER_MAX"):
-        max_iter = cfg.SOLVER.EPOCH_ITER_MAX
-    else:
-        max_iter = data_size
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
-        if cur_iter >= max_iter:
-            break
         
         # Transfer the data to the current GPU device.
         if cfg.NUM_GPUS:
@@ -147,7 +149,7 @@ def train_epoch(
                 )
 
         else:
-            top1_err, top2_err = None, None
+            top1_err, top5_err = None, None
             if cfg.DATA.MULTI_LABEL:
                 # Gather all the predictions across all the devices.
                 if cfg.NUM_GPUS > 1:
@@ -197,17 +199,22 @@ def train_epoch(
 
                 if cfg.TENSORBOARD.SAMPLE_VIS.ENABLE and (cur_iter)%cfg.TENSORBOARD.SAMPLE_VIS.LOG_PERIOD==0:
                     writer.add_video_pred(
-                            inputs[0], 
-                            torch.argmax(preds, dim=1), 
-                            labels,
-                            tag="Sample/Train",
-                            global_step = data_size * cur_epoch + cur_iter,
-                        )
+                        inputs[0], 
+                        torch.argmax(preds, dim=1), 
+                        labels,
+                        tag="Sample/Train",
+                        global_step = data_size * cur_epoch + cur_iter,
+                    )
 
         train_meter.iter_toc()  # measure allreduce for this meter
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         train_meter.update_predictions(preds, labels)
+        torch.cuda.synchronize()
         train_meter.iter_tic()
+    del inputs, labels, preds, loss
+
+    # in case of fragmented memory
+    torch.cuda.empty_cache()
 
     # Log epoch stats.
     train_meter.log_epoch_stats(cur_epoch)
@@ -228,9 +235,7 @@ def train_epoch(
                     {"Train": train_meter.num_top5_mis / train_meter.num_samples}, global_step=cur_epoch
                 )
             all_preds = [pred.clone().detach() for pred in train_meter.all_preds]
-            all_labels = [
-                label.clone().detach() for label in train_meter.all_labels
-            ]
+            all_labels = [label.clone().detach() for label in train_meter.all_labels]
             if cfg.NUM_GPUS:
                 all_preds = [pred.cpu() for pred in all_preds]
                 all_labels = [label.cpu() for label in all_labels]

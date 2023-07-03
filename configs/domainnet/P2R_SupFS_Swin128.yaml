@@ -1,16 +1,16 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 384
+  BATCH_SIZE: 512
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
-  CHECKPOINT_FILE_PATH: /pasteur/data/slowfast/models/swin_base_patch4_window7_224.pth
+  CHECKPOINT_FILE_PATH: /pasteur/u/mottaghi/models/swin_base_patch4_window7_224.pth
   CHECKPOINT_EPOCH_RESET: True
 DATA:
-  PATH_TO_DATA_DIR: /pasteur/data/slowfast/datasets/domainnet
-  PATH_PREFIX: /pasteur/data/slowfast/datasets/domainnet
-  PATH_TO_PRELOAD_IMDB: /pasteur/data/slowfast/datasets/domainnet
+  PATH_TO_DATA_DIR: /pasteur/u/mottaghi/datasets/domainnet
+  PATH_PREFIX: /pasteur/u/mottaghi/datasets/domainnet
+  PATH_TO_PRELOAD_IMDB: /pasteur/u/mottaghi/datasets/domainnet
   IMDB_FILES:
     TRAIN: ['painting']
     VAL: ['real']
@@ -70,7 +70,7 @@ TENSORBOARD:
   ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: /pasteur/data/slowfast/datasets/domainnet/classnames.json
+  CLASS_NAMES_PATH: /pasteur/u/mottaghi/datasets/domainnet/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
@@ -79,8 +79,8 @@ TENSORBOARD:
   DIST_VIS:
     ENABLE: True
     LOG_PERIOD: 1000
-NUM_GPUS: 4
+NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/results/slowfast/domainnet/P2R_SupFS_Swin128_run0
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/P2R_SupFS_Swin128_run0
 LOG_MODEL_INFO: False

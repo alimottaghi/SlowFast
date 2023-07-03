@@ -62,25 +62,24 @@ def train_epoch(
     train_meter.iter_tic()
     data_size = len(source_loader)
     target_unl_iter = iter(target_unl_loader)
+    target_unl_size = len(target_unl_loader)
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
         target_lab_iter = iter(target_lab_loader)
+        target_lab_size = len(target_lab_loader)
 
     # Explicitly declare reduction to mean.
     loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
     loss_fun_none = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="none")
 
     for cur_iter, (inputs_source, labels_source, _, _) in enumerate(source_loader):
-        try:
-            inputs_target_unl, labels_target_unl, _, _ = next(target_unl_iter)
-        except StopIteration:
+        # Load the data.
+        if cur_iter%target_unl_size==0:
             target_unl_iter = iter(target_unl_loader)
-            inputs_target_unl, labels_target_unl, _, _ = next(target_unl_iter)
+        inputs_target_unl, labels_target_unl, _, _ = next(target_unl_iter)
         if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-            try:
-                inputs_target_lab, labels_target_lab, _, _ = next(target_lab_iter)
-            except StopIteration:
+            if cur_iter%target_lab_size==0:
                 target_lab_iter = iter(target_lab_loader)
-                inputs_target_lab, labels_target_lab, _, _ = next(target_lab_iter)
+            inputs_target_lab, labels_target_lab, _, _ = next(target_lab_iter)
         
         # Transfer the data to the current GPU device.
         for i in range(len(inputs_source)):
@@ -190,24 +189,8 @@ def train_epoch(
             loss_t = loss_fun_none(logits_tus, pseudo_labels)
             loss_t = (mask * loss_t).mean(dim=0)
             loss = loss_s + cfg.ADAMATCH.MU * mu * loss_t
-
-        # check Nan Loss.
-        misc.check_nan_losses(loss)
-        scaler.scale(loss).backward()
-        # Unscales the gradients of optimizer's assigned params in-place
-        scaler.unscale_(optimizer)
-        # Clip gradients if necessary
-        if cfg.SOLVER.CLIP_GRAD_VAL:
-            torch.nn.utils.clip_grad_value_(
-                model.parameters(), cfg.SOLVER.CLIP_GRAD_VAL
-            )
-        elif cfg.SOLVER.CLIP_GRAD_L2NORM:
-            torch.nn.utils.clip_grad_norm_(
-                model.parameters(), cfg.SOLVER.CLIP_GRAD_L2NORM
-            )
-        # Update the parameters.
-        scaler.step(optimizer)
-        scaler.update()
+            loss.backward()
+            optimizer.step()
 
         # Compute the errors.
         num_topks_correct = metrics.topks_correct(logits_sls, labels_source, (1, 5))
@@ -223,7 +206,7 @@ def train_epoch(
         # Gather all the predictions across all the devices.
         if cfg.NUM_GPUS > 1:
             loss, loss_s, loss_t, top1_err, top5_err = du.all_reduce(
-                [loss.detach(), loss_s, loss_t, top1_err, top5_err]
+                [loss, loss_s, loss_t, top1_err, top5_err]
             )
             num_pred_mask, num_sampling_mask, num_pseudo, num_correct = du.all_reduce(
                 [num_pred_mask, num_sampling_mask, num_pseudo, num_correct], 
@@ -233,7 +216,7 @@ def train_epoch(
         # Copy the stats from GPU to CPU (sync point).
         loss, loss_s, loss_t, top1_err, top5_err = (
             loss.item(),
-            loss_s.item(), 
+            loss_s.item(),
             loss_t.item(),
             top1_err.item(),
             top5_err.item()
@@ -356,10 +339,9 @@ def train_epoch(
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         torch.cuda.synchronize()
         train_meter.iter_tic()
-        del inputs_source
-        del inputs_target_unl
+        del inputs_source, inputs_target_unl, labels_source, labels_target_unl
         if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-            del inputs_target_lab
+            del inputs_target_lab, labels_target_lab
 
         # in case of fragmented memory
         torch.cuda.empty_cache()
@@ -570,7 +552,7 @@ def train(cfg):
 
     # Create the video train and val loaders.
     if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-        source_cfg = copy.deepcopy(cfg) 
+        source_cfg = copy.deepcopy(cfg)
         source_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
         source_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
         source_loader = loader.construct_loader(source_cfg, "train")
@@ -580,12 +562,12 @@ def train(cfg):
         target_lab_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
         target_lab_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.ALPHA * source_cfg.TRAIN.BATCH_SIZE)
         target_lab_loader = loader.construct_loader(target_lab_cfg, "lab")
-        target_unl_cfg = copy.deepcopy(cfg) 
+        target_unl_cfg = copy.deepcopy(cfg)
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
         target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "unl")
-        bn_cfg = copy.deepcopy(cfg) 
+        bn_cfg = copy.deepcopy(cfg)
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
         bn_cfg.ADAMATCH.ENABLE = False
         precise_bn_loader = (
@@ -595,17 +577,17 @@ def train(cfg):
         )
         train_loaders = [source_loader, target_unl_loader, target_lab_loader]
     else:
-        source_cfg = copy.deepcopy(cfg) 
+        source_cfg = copy.deepcopy(cfg)
         source_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
         source_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
         source_loader = loader.construct_loader(source_cfg, "train")
         val_loader = loader.construct_loader(source_cfg, "val")
-        target_unl_cfg = copy.deepcopy(cfg) 
+        target_unl_cfg = copy.deepcopy(cfg)
         target_unl_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
         target_unl_cfg.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
         target_unl_cfg.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_cfg.TRAIN.BATCH_SIZE)
         target_unl_loader = loader.construct_loader(target_unl_cfg, "train")
-        bn_cfg = copy.deepcopy(cfg) 
+        bn_cfg = copy.deepcopy(cfg)
         bn_cfg.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE + cfg.ADAPTATION.TARGET 
         bn_cfg.ADAMATCH.ENABLE = False
         precise_bn_loader = (
