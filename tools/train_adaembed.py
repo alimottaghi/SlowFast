@@ -319,9 +319,9 @@ def train_epoch(
 
             unl_preds_rev, _ = model([target_unl_weak], reverse=True)
             new_preds = F.softmax(unl_preds_rev, dim=1)
-            loss_h = cfg.ADAEMBED.LAMBDA_H * mu * torch.mean(
-                torch.sum(new_preds * (torch.log(new_preds + 1e-5)), 1))
-            loss_h.backward()
+            loss_h = torch.mean(torch.sum(new_preds * (torch.log(new_preds + 1e-5)), 1))
+            loss2 = cfg.ADAEMBED.LAMBDA_H * mu * loss_h
+            loss2.backward()
             optimizer_f.step()
             optimizer_c.step()
 
