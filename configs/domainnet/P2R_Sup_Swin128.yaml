@@ -1,7 +1,7 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 768
+  BATCH_SIZE: 128
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
@@ -65,10 +65,10 @@ DATA_LOADER:
   NUM_WORKERS: 8
   PIN_MEMORY: True
 TENSORBOARD:
-  ENABLE: True
+  ENABLE: False
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: /pasteur/u/mottaghi/datasets/domainnet/classnames.json
+  CLASS_NAMES_PATH: /pasteur/u/mottaghi/domainnet/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
   SAMPLE_VIS:
@@ -77,7 +77,7 @@ TENSORBOARD:
   DIST_VIS:
     ENABLE: True
     LOG_PERIOD: 1000
-NUM_GPUS: 8
+NUM_GPUS: 4
 NUM_SHARDS: 1
 RNG_SEED: 0
 OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/P2R_Sup_Swin128_run0

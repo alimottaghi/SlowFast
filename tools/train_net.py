@@ -69,7 +69,13 @@ def train_epoch(
             num_classes=cfg.MODEL.NUM_CLASSES,
         )
 
+    # if hasattr(cfg.SOLVER, "EPOCH_ITER_MAX"):
+    #     max_iter = cfg.SOLVER.EPOCH_ITER_MAX
+    # else:
+    #     max_iter = data_size
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
+        # if cur_iter >= max_iter:
+        #     break
         
         # Transfer the data to the current GPU device.
         if cfg.NUM_GPUS:

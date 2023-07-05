@@ -150,7 +150,7 @@ def train_epoch(
 
         # Generate tau.
         if cfg.ADAEMBED.THRESHOLDING and len(train_meter.all_lab_preds) > 10:
-            if cfg.ADAEMBED.THRESHOLDING=='unifrom':
+            if cfg.ADAEMBED.THRESHOLDING=='uniform':
                 c_tau = cfg.ADAEMBED.TAU * torch.ones(cfg.MODEL.NUM_CLASSES).cuda()
             elif cfg.ADAEMBED.THRESHOLDING=='relative':
                 max_preds = F.softmax(lab_probs_bank, dim=1).max(dim=1)[0]
@@ -353,7 +353,7 @@ def train_epoch(
         # Gather all the predictions across all the devices.
         if cfg.NUM_GPUS > 1:
             loss, loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err = du.all_reduce(
-                [loss.detach(), loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err]
+                [loss, loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err]
             )
             num_pred_mask, num_sampling_mask, num_pseudo, num_correct = du.all_reduce(
                 [num_pred_mask, num_sampling_mask, num_pseudo, num_correct], 
@@ -363,7 +363,7 @@ def train_epoch(
         # Copy the stats from GPU to CPU (sync point).
         loss, loss_s, loss_t, loss_p, loss_c, loss_h, top1_err, top5_err = (
             loss.item(),
-            loss_s.item(), 
+            loss_s.item(),
             loss_t.item(),
             loss_p.item(), 
             loss_c.item(),
@@ -466,23 +466,6 @@ def train_epoch(
                     global_step=data_size * cur_epoch + cur_iter
                 )
 
-                # all_lab_preds = torch.cat(train_meter.all_lab_preds, dim=0)
-                # all_lab_feats = torch.cat(train_meter.all_lab_feats, dim=0)
-                # all_unl_preds = torch.cat(train_meter.all_unl_preds, dim=0)
-                # all_unl_feats = torch.cat(train_meter.all_unl_feats, dim=0)
-                # all_lab_labels = torch.cat(train_meter.all_lab_labels, dim=0)
-                # all_unl_labels = torch.cat(train_meter.all_unl_labels, dim=0)
-                # dict2save = {
-                #     "all_lab_preds": all_lab_preds.detach().cpu(),
-                #     "all_lab_feats": all_lab_feats.detach().cpu(),
-                #     "all_unl_preds": all_unl_preds.detach().cpu(),
-                #     "all_unl_feats": all_unl_feats.detach().cpu(),
-                #     "all_lab_labels": all_lab_labels.detach().cpu(),
-                #     "all_unl_labels": all_unl_labels.detach().cpu(),
-                #     "prototypes": prototypes.detach().cpu(),
-                # }
-                # np.save(cfg.OUTPUT_DIR + f'/step{data_size * cur_epoch + cur_iter}.npy', dict2save)
-
             if cfg.TENSORBOARD.SAMPLE_VIS.ENABLE and (data_size * cur_epoch + cur_iter)%cfg.TENSORBOARD.SAMPLE_VIS.LOG_PERIOD==0:
                 writer.add_video_pred(
                     source_strong, 
@@ -509,10 +492,9 @@ def train_epoch(
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         torch.cuda.synchronize()
         train_meter.iter_tic()
-        del inputs_source
-        del inputs_target_unl
+        del inputs_source, inputs_target_unl, labels_source, labels_target_unl
         if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-            del inputs_target_lab
+            del inputs_target_lab, labels_target_lab
 
         # in case of fragmented memory
         torch.cuda.empty_cache()
