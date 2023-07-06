@@ -1,7 +1,7 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 32
+  BATCH_SIZE: 144
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
@@ -62,13 +62,13 @@ TEST:
   NUM_ENSEMBLE_VIEWS: 1
   NUM_SPATIAL_CROPS: 3
 DATA_LOADER:
-  NUM_WORKERS: 8
+  NUM_WORKERS: 4
   PIN_MEMORY: True
 TENSORBOARD:
-  ENABLE: False
+  ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: /pasteur/u/mottaghi/domainnet/classnames.json
+  CLASS_NAMES_PATH: /pasteur/u/mottaghi/datasets/domainnet/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
     FIGSIZE: [30, 30]
@@ -95,11 +95,11 @@ ADAEMBED:
   LAMBDA_T: 1.0
   LAMBDA_P: 0.0
   LAMBDA_C: 0.0
-  TEMP: 0.05
-  EMA: 0.9
-  TAU: 0.9
+  TEMP: 0.07
+  EMA: 0.999
+  TAU: 0.8
   NUM_NEIGHBORS: 10
-  PSEUDO_TYPE: AdaMatch
+  PSEUDO_TYPE: AdaEmbed
   THRESHOLDING: uniform
   ALIGNMENT: True
   SAMPLING: True

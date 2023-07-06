@@ -1,7 +1,7 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 128
+  BATCH_SIZE: 144
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
@@ -65,10 +65,10 @@ DATA_LOADER:
   NUM_WORKERS: 4
   PIN_MEMORY: True
 TENSORBOARD:
-  ENABLE: False
+  ENABLE: True
   SYNC_WANDB: True
   LOG_DIR: logs
-  CLASS_NAMES_PATH: /pasteur/u/mottaghi/domainnet/classnames.json
+  CLASS_NAMES_PATH: /pasteur/u/mottaghi/datasets/domainnet/classnames.json
   CONFUSION_MATRIX:
     ENABLE: True
     FIGSIZE: [30, 30]
