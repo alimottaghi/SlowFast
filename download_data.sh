@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /data/slowfast
+cd /data
 mkdir -p domainnet
 cd domainnet
 wget http://csr.bu.edu/ftp/visda/2019/multi-source/clipart.zip
@@ -38,3 +38,17 @@ tar xvf test.tar
 rm train.tar
 rm validation.tar
 rm test.tar
+
+cd /data/domainnet
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/clipart_train.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/clipart_test.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/infograph_train.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/infograph_test.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/painting_train.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/painting_test.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/quickdraw_train.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/quickdraw_test.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/real_train.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/real_test.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/sketch_train.txt
+wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/sketch_test.txt

@@ -122,7 +122,10 @@ def train_epoch(
             feats_bank = torch.cat((lab_feats_bank, unl_feats_bank), dim=0)
             probs_bank = torch.cat((lab_probs_bank, unl_probs_bank), dim=0)
         else:
-            num_features = model.module.num_features
+            if cfg.NUM_GPUS > 1:
+                num_features = model.module.num_features
+            else:
+                num_features = model.num_features
             lab_feats_bank = torch.zeros(10, num_features).cuda()
             unl_feats_bank = torch.zeros(10, num_features).cuda()
             lab_probs_bank = torch.zeros(10, cfg.MODEL.NUM_CLASSES).cuda()
@@ -224,7 +227,11 @@ def train_epoch(
                 unl_labels = labels_target_unl
                 lab_feats_strong = torch.cat((feats_sls, feats_tls), dim=0)
                 lab_preds_strong = torch.cat((logits_sls, logits_tls), dim=0)
-            prototypes = model.module.head.weight.clone().detach()
+
+            if cfg.NUM_GPUS > 1:
+                prototypes = model.module.head.weight.clone().detach()
+            else:
+                prototypes = model.head.weight.clone().detach()
 
             # Compute the loss.
             loss_s = loss_fun(lab_preds_strong, lab_labels)
@@ -703,11 +710,18 @@ def train(cfg):
 
     # Construct the optimizer.
     sub_modules = []
-    for name, sub_module in model.module.named_modules():
-        if name!="head":
-            sub_modules.append(sub_module)
-    backbone = nn.Sequential(*sub_modules)
-    classifier = model.module.get_submodule("head")
+    if cfg.NUM_GPUS > 1:
+        for name, sub_module in model.module.named_modules():
+            if name!="head":
+                sub_modules.append(sub_module)
+        backbone = nn.Sequential(*sub_modules)
+        classifier = model.module.get_submodule("head")
+    else:
+        for name, sub_module in model.named_modules():
+            if name!="head":
+                sub_modules.append(sub_module)
+        backbone = nn.Sequential(*sub_modules)
+        classifier = model.get_submodule("head")
     optimizer_f = optim.construct_optimizer(backbone, cfg)
     optimizer_c = optim.construct_optimizer(classifier, cfg)
     optimizers = [optimizer_f, optimizer_c]
