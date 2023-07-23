@@ -7,7 +7,7 @@ from slowfast.utils.misc import launch_job
 from slowfast.utils.parser import load_config, parse_args
 
 from test_net import test
-from train_net import train
+from train import train
 from visualization import visualize
 from extract_features import extract
 from train_adamatch import train as adamatch

@@ -109,7 +109,8 @@ class TensorboardWriter(object):
         """
         if self.writer is not None:
             for key, item in data_dict.items():
-                self.writer.add_scalar(key, item, global_step)
+                if item is not None:
+                    self.writer.add_scalar(key, item, global_step)
 
     def plot_eval(self, preds, labels, global_step=None, tag="Confusion Matrix"):
         """
