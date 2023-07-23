@@ -55,9 +55,7 @@ def train_epoch(train_loader, model, optimizer, scaler, train_meter, cur_epoch, 
         train_meter.iter_tic()
 
     clear_memory(inputs, labels, preds, loss)
-
     log_epoch_stats(train_meter, cur_epoch, writer, cfg, tag="Train")
-
     train_meter.reset()
 
 
@@ -158,19 +156,19 @@ def clear_memory(inputs, labels, preds, loss):
     torch.cuda.empty_cache()
 
 
-def log_epoch_stats(train_meter, cur_epoch, writer, cfg, tag="Train"):
-    train_meter.log_epoch_stats(cur_epoch)
+def log_epoch_stats(meter, cur_epoch, writer, cfg, tag="Train"):
+    meter.log_epoch_stats(cur_epoch)
     if writer is not None and cfg.TENSORBOARD.EPOCH_LOG.ENABLE:
         writer.writer.add_scalars(
             "Error/Top1_err",
-            {tag: train_meter.num_top1_mis / train_meter.num_samples}, global_step=cur_epoch
+            {tag: meter.num_top1_mis / meter.num_samples}, global_step=cur_epoch
         )
         writer.writer.add_scalars(
             "Error/Top5_err",
-            {tag: train_meter.num_top5_mis / train_meter.num_samples}, global_step=cur_epoch
+            {tag: meter.num_top5_mis / meter.num_samples}, global_step=cur_epoch
         )
-        all_preds = [pred.clone().detach() for pred in train_meter.all_preds]
-        all_labels = [label.clone().detach() for label in train_meter.all_labels]
+        all_preds = [pred.clone().detach() for pred in meter.all_preds]
+        all_labels = [label.clone().detach() for label in meter.all_labels]
         if cfg.NUM_GPUS:
             all_preds = [pred.cpu() for pred in all_preds]
             all_labels = [label.cpu() for label in all_labels]
@@ -206,6 +204,7 @@ def train(cfg):
     du.init_distributed_training(cfg)
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
+    writer = tb.TensorboardWriter(cfg) if cfg.TENSORBOARD.ENABLE and du.is_master_proc(cfg.NUM_GPUS * cfg.NUM_SHARDS) else None
     logging.setup_logging(cfg.OUTPUT_DIR)
     logger.info("Train with config:")
     logger.info(pprint.pformat(cfg))
@@ -225,10 +224,7 @@ def train(cfg):
     train_meter = TrainMeter(len(train_loader), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
-    writer = tb.TensorboardWriter(cfg) if cfg.TENSORBOARD.ENABLE and du.is_master_proc(cfg.NUM_GPUS * cfg.NUM_SHARDS) else None
-
     logger.info("Start epoch: {}".format(start_epoch + 1))
-
     epoch_timer = EpochTimer()
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
         loader.shuffle_dataset(train_loader, cur_epoch)

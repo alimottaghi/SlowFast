@@ -20,7 +20,7 @@ DATA:
   INPUT_CHANNEL_NUM: [3]
 AUG:
   ENABLE: True
-  AA_TYPE: rand-m10-n2-mstd0.5-inc1
+  AA_TYPE: rand-m10-n2-mstd2.0-inc1
   COLOR_JITTER: 0.4
   RE_COUNT: 1
   RE_PROB: 0.25
@@ -43,7 +43,7 @@ SWIN:
   NORM_LAYER: layernorm
   SPATIAL_TYPE: avg
 SOLVER:
-  BASE_LR: 0.02
+  BASE_LR: 0.05
   LR_POLICY: cosine
   MAX_EPOCH: 40
   MOMENTUM: 0.9
