@@ -12,7 +12,7 @@ from visualization import visualize
 from extract_features import extract
 from train_adamatch import train as adamatch
 from train_adaembed import train as adaembed
-from train_mme import train as mme
+from mme import train as mme
 from train_mcd import train as mcd
 
 def main():

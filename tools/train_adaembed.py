@@ -176,13 +176,13 @@ def train_epoch(
             c_tau = torch.ones(cfg.MODEL.NUM_CLASSES).cuda()
 
         train_meter.data_toc()
-        source_weak = inputs_source[0]
-        source_strong = inputs_source[1]
-        target_unl_weak = inputs_target_unl[0]
-        target_unl_strong = inputs_target_unl[1]
+        source_weak = inputs_source[1]
+        source_strong = inputs_source[0]
+        target_unl_weak = inputs_target_unl[1]
+        target_unl_strong = inputs_target_unl[0]
         if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-            target_lab_weak = inputs_target_lab[0]
-            target_lab_strong = inputs_target_lab[1]
+            target_lab_weak = inputs_target_lab[1]
+            target_lab_strong = inputs_target_lab[0]
         
         if not cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
             inputs_weak = torch.cat((source_weak, target_unl_weak), dim=0)
@@ -699,7 +699,7 @@ def train(cfg):
     # Build the video model and print model statistics.
     cfg.EXTRACT.ENABLE = True
     cfg.SWIN.TEMP = cfg.ADAEMBED.TEMP
-    cfg.SWIN.ETA = cfg.ADAEMBED.LAMBDA_H
+    cfg.SWIN.ETA = 1.0
     model = build_model(cfg)
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)

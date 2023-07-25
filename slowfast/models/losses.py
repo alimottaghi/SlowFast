@@ -49,3 +49,9 @@ def get_loss_func(loss_name):
     if loss_name not in _LOSSES.keys():
         raise NotImplementedError("Loss {} is not supported".format(loss_name))
     return _LOSSES[loss_name]
+
+
+def discrepancy_loss(preds):
+    soft_preds = F.softmax(preds, dim=1)
+    loss_h = torch.mean(torch.sum(soft_preds * (torch.log(soft_preds + 1e-5)), 1))
+    return loss_h

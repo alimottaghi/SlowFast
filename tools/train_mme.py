@@ -95,13 +95,13 @@ def train_epoch(
         optim.set_lr(optimizer_c, lr)
 
         train_meter.data_toc()
-        source_weak = inputs_source[0]
-        source_strong = inputs_source[1]
-        target_unl_weak = inputs_target_unl[0]
-        target_unl_strong = inputs_target_unl[1]
+        source_weak = inputs_source[1]
+        source_strong = inputs_source[0]
+        target_unl_weak = inputs_target_unl[1]
+        target_unl_strong = inputs_target_unl[0]
         if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
-            target_lab_weak = inputs_target_lab[0]
-            target_lab_strong = inputs_target_lab[1]
+            target_lab_weak = inputs_target_lab[1]
+            target_lab_strong = inputs_target_lab[0]
         
         if not cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
             lab_inputs = [source_strong]
@@ -426,9 +426,14 @@ def train(cfg):
 
     # Construct the optimizer.
     sub_modules = []
-    for name, sub_module in model.module.named_modules():
-        if name!="head":
-            sub_modules.append(sub_module)
+    if cfg.NUM_GPUS > 1:
+        for name, sub_module in model.module.named_modules():
+            if name!="head":
+                sub_modules.append(sub_module)
+    else:
+        for name, sub_module in model.named_modules():
+            if name!="head":
+                sub_modules.append(sub_module)
     backbone = nn.Sequential(*sub_modules)
     classifier = model.module.get_submodule("head")
     optimizer_f = optim.construct_optimizer(backbone, cfg)

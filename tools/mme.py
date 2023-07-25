@@ -7,7 +7,6 @@ import pprint
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
 
 import slowfast.models.losses as losses
 import slowfast.models.optimizer as optim
@@ -25,35 +24,66 @@ from slowfast.datasets import utils as data_utils
 logger = logging.get_logger(__name__)
 
 
-def train_epoch(train_loader, model, optimizer, scaler, train_meter, cur_epoch, cfg, writer=None):
+def train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch, cfg, writer=None):
     model.train()
     train_meter.iter_tic()
-    data_size = len(train_loader)
+    optimizer_f, optimizer_c = optimizers[0], optimizers[1]
     mb_size = cfg.TRAIN.BATCH_SIZE * max(cfg.NUM_GPUS, 1)
     loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
+    discrepancy_loss = losses.discrepancy_loss
 
-    for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
-        inputs, labels, meta = transfer_to_device(inputs, labels, meta, cfg)
+    source_loader, target_unl_loader = train_loaders[:2]
+    source_size = len(source_loader)
+    target_unl_size = len(target_unl_loader)
+    target_unl_iter = iter(target_unl_loader)
+    semi_supervised = cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE
+    if semi_supervised:
+        target_lab_loader = train_loaders[2]
+        target_lab_size = len(target_lab_loader)
+        target_lab_iter = iter(target_lab_loader)
+        
+    for cur_iter, (inputs_source, labels_source, _, _) in enumerate(source_loader):
+        inputs_source, labels_source, _ = transfer_to_device(inputs_source, labels_source, _, cfg)
+        inputs_target_unl, labels_target_unl, target_unl_iter = get_next_batch(target_unl_iter, target_unl_loader, cur_iter, target_unl_size, cfg)
+        lab_inputs = [inputs_source[0]]
+        lab_labels = labels_source
+        unl_inputs = [inputs_target_unl[1]]
+        if semi_supervised:
+            inputs_target_lab, labels_target_lab, target_lab_iter = get_next_batch(target_lab_iter, target_lab_loader, cur_iter, target_lab_size, cfg)
+            lab_inputs = [torch.cat((inputs_source[0], inputs_target_lab[0]), dim=0)]
+            lab_labels = torch.cat((labels_source, labels_target_lab), dim=0)
 
-        lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
-        optim.set_lr(optimizer, lr)
+        lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / source_size, cfg)
+        optim.set_lr(optimizer_f, lr)
+        optim.set_lr(optimizer_c, lr)
         train_meter.data_toc()
 
+        # Step A train all networks to minimize loss on source domain
         with torch.cuda.amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
-            preds = model(inputs)
-            loss = loss_fun(preds, labels)
-        perform_backward_pass(optimizer, scaler, loss, model, cfg)
-        loss, top1_err, top5_err = calculate_errors(loss, preds, labels, cfg)
+            lab_preds, lab_feats = model(lab_inputs)
+            loss_s = loss_fun(lab_preds, lab_labels)
+        perform_backward_pass(optimizer_f, optimizer_c, scaler, loss_s, model, cfg)
+
+        # Step B train classifier to maximize discrepancy
+        with torch.cuda.amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
+            unl_preds, unl_feats = model(unl_inputs, reverse=True)
+            loss_h = cfg.MME.LAMBDA * discrepancy_loss(unl_preds)
+        perform_backward_pass(optimizer_f, optimizer_c, scaler, loss_h, model, cfg)
+
+        loss, top1_err, top5_err = calculate_errors(loss_s, lab_preds, lab_labels, cfg)
         train_meter.update_stats(top1_err, top5_err, loss, lr, mb_size)
-        write_to_tensorboard(writer, loss, lr, data_size, cur_epoch, cur_iter, cfg, inputs, preds, labels, top1_err, top5_err, tag="Train")
+        write_to_tensorboard(writer, loss, lr, source_size, cur_epoch, cur_iter, cfg, lab_inputs, lab_preds, lab_labels, top1_err, top5_err, tag="Train")
 
         train_meter.iter_toc()
         train_meter.log_iter_stats(cur_epoch, cur_iter)
-        train_meter.update_predictions(preds, labels)
+        train_meter.update_predictions(lab_preds, lab_labels)
         torch.cuda.synchronize()
         train_meter.iter_tic()
 
-    clear_memory(inputs, labels, preds, loss)
+    clear_memory(inputs_source, labels_source, lab_preds, loss_s)
+    clear_memory(inputs_target_unl, labels_target_unl, unl_preds, loss_h)
+    if semi_supervised:
+        clear_memory(inputs_target_lab, labels_target_lab)
     log_epoch_stats(train_meter, cur_epoch, writer, cfg, tag="Train")
     train_meter.reset()
 
@@ -68,7 +98,7 @@ def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
         inputs, labels, meta = transfer_to_device(inputs, labels, meta, cfg)
         val_meter.data_toc()
 
-        preds = model(inputs)
+        preds, _ = model(inputs)
 
         if cfg.DATA.MULTI_LABEL:
             if cfg.NUM_GPUS > 1:
@@ -101,16 +131,27 @@ def transfer_to_device(inputs, labels, meta, cfg):
     return inputs, labels, meta
 
 
-def perform_backward_pass(optimizer, scaler, loss, model, cfg):
+def get_next_batch(loader_iter, loader, cur_iter, loader_size, cfg):
+    if cur_iter % loader_size == 0:
+        loader_iter = iter(loader)
+    inputs, labels, _, _ = next(loader_iter)
+    inputs, labels, _ = transfer_to_device(inputs, labels, _, cfg)
+    return inputs, labels, loader_iter
+
+
+def perform_backward_pass(optimizer_f, optimizer_c, scaler, loss, model, cfg):
     misc.check_nan_losses(loss)
-    optimizer.zero_grad()
+    optimizer_f.zero_grad()
+    optimizer_c.zero_grad()
     scaler.scale(loss).backward()
-    scaler.unscale_(optimizer)
+    scaler.unscale_(optimizer_f)
+    scaler.unscale_(optimizer_c)
     if cfg.SOLVER.CLIP_GRAD_VAL:
         torch.nn.utils.clip_grad_value_(model.parameters(), cfg.SOLVER.CLIP_GRAD_VAL)
     elif cfg.SOLVER.CLIP_GRAD_L2NORM:
         torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.SOLVER.CLIP_GRAD_L2NORM)
-    scaler.step(optimizer)
+    scaler.step(optimizer_f)
+    scaler.step(optimizer_c)
     scaler.update()
 
 
@@ -193,15 +234,6 @@ def log_epoch_time(cur_epoch, start_epoch, epoch_timer, loader_len):
                 f"{epoch_timer.avg_epoch_time()/loader_len:.2f}s in average.")
 
 
-def calculate_and_update_precise_bn(loader, model, num_iters, cfg):
-    def _gen_loader():
-        for inputs, _, _ in loader:
-            inputs, _, _ = transfer_to_device(inputs, None, None, cfg)
-            yield inputs
-
-    update_bn_stats(model, _gen_loader(), num_iters)
-
-
 def train(cfg):
     du.init_distributed_training(cfg)
     np.random.seed(cfg.RNG_SEED)
@@ -211,41 +243,61 @@ def train(cfg):
     logger.info("Train with config:")
     logger.info(pprint.pformat(cfg))
 
+    if "SwinTransformer" not in cfg.MODEL.MODEL_NAME:
+        raise NotImplementedError("Only Swin Transformer is supported for MME")
+    cfg.EXTRACT.ENABLE = True
+    cfg.SWIN.TEMP = cfg.MME.TEMP
+    cfg.SWIN.ETA = cfg.MME.ETA
     model = build_model(cfg)
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)
 
-    optimizer = optim.construct_optimizer(model, cfg)
+    optimizer_f, optimizer_c = optim.construct_optimizer(model, cfg)
+    optimizers = [optimizer_f, optimizer_c]
+
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)
-    start_epoch = cu.load_train_checkpoint(cfg, model, optimizer, scaler if cfg.TRAIN.MIXED_PRECISION else None)
+    start_epoch = cu.load_train_checkpoint(cfg, model, optimizer_f, scaler if cfg.TRAIN.MIXED_PRECISION else None)
 
-    train_loader = loader.construct_loader(cfg, "train")
-    val_loader = loader.construct_loader(cfg, "val")
-    precise_bn_loader = loader.construct_loader(cfg, "train", is_precise_bn=True) if cfg.BN.USE_PRECISE_STATS else None
+    # Create the train and val loaders.    
+    source_config = copy.deepcopy(cfg)
+    source_config.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.SOURCE
+    source_config.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.TARGET
+    source_loader = loader.construct_loader(source_config, "train")
+    val_loader = loader.construct_loader(source_config, "val")
 
-    train_meter = TrainMeter(len(train_loader), cfg)
+    target_loaders = {}
+    for target_type in ["unl", "lab"]:
+        target_config = copy.deepcopy(cfg)
+        target_config.DATA.IMDB_FILES.TRAIN = cfg.ADAPTATION.TARGET
+        target_config.DATA.IMDB_FILES.VAL = cfg.ADAPTATION.SOURCE
+        target_config.TRAIN.BATCH_SIZE = int(cfg.ADAPTATION.BETA * source_config.TRAIN.BATCH_SIZE) if target_type == "unl" else int(cfg.ADAPTATION.ALPHA * source_config.TRAIN.BATCH_SIZE)
+        target_loaders[target_type] = loader.construct_loader(target_config, "train")
+    
+    if cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE:
+        train_loaders = [source_loader, target_loaders["unl"], target_loaders["lab"]]
+    else:
+        train_loaders = [source_loader, target_loaders["unl"]]
+
+    train_meter = TrainMeter(len(train_loaders[0]), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
     logger.info("Start epoch: {}".format(start_epoch + 1))
     epoch_timer = EpochTimer()
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
-        loader.shuffle_dataset(train_loader, cur_epoch)
+        logger.info("Shuffling data...")
+        for train_loader in train_loaders:
+            loader.shuffle_dataset(train_loader, cur_epoch)
+        
+        logger.info(f"Epoch {cur_epoch + 1}/{cfg.SOLVER.MAX_EPOCH} started ...")
         epoch_timer.epoch_tic()
-        train_epoch(train_loader, model, optimizer, scaler, train_meter, cur_epoch, cfg, writer)
+        train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch, cfg, writer)
         epoch_timer.epoch_toc()
         log_epoch_time(cur_epoch, start_epoch, epoch_timer, len(train_loader))
 
-        is_checkp_epoch = cu.is_checkpoint_epoch(cfg, cur_epoch, None)
-        is_eval_epoch = misc.is_eval_epoch(cfg, cur_epoch, None)
+        if cu.is_checkpoint_epoch(cfg, cur_epoch, None):
+            cu.save_checkpoint(cfg.OUTPUT_DIR, model, optimizer_f, cur_epoch, cfg, scaler if cfg.TRAIN.MIXED_PRECISION else None)
 
-        if (is_checkp_epoch or is_eval_epoch) and cfg.BN.USE_PRECISE_STATS and len(get_bn_modules(model)) > 0:
-            calculate_and_update_precise_bn(precise_bn_loader, model, min(cfg.BN.NUM_BATCHES_PRECISE, len(precise_bn_loader)), cfg)
-        _ = misc.aggregate_sub_bn_stats(model)
-
-        if is_checkp_epoch:
-            cu.save_checkpoint(cfg.OUTPUT_DIR, model, optimizer, cur_epoch, cfg, scaler if cfg.TRAIN.MIXED_PRECISION else None)
-
-        if is_eval_epoch:
+        if misc.is_eval_epoch(cfg, cur_epoch, None):
             eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer)
 
     if writer is not None:

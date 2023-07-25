@@ -4,8 +4,13 @@
 """Optimizer."""
 
 import torch
+import logging
 
+import slowfast.utils.logging as logging
 import slowfast.utils.lr_policy as lr_policy
+
+
+logger = logging.get_logger(__name__)
 
 
 def construct_optimizer(model, cfg):
@@ -24,53 +29,87 @@ def construct_optimizer(model, cfg):
         learning rate,  momentum, weight_decay, dampening, and etc.
     """
     bn_parameters = []
-    non_bn_parameters = []
+    base_parameters = []
+    head_parameters = []
     zero_parameters = []
     skip = {}
     if hasattr(model, "no_weight_decay"):
         skip = model.no_weight_decay()
 
     for name, m in model.named_modules():
-        is_bn = isinstance(m, torch.nn.modules.batchnorm._NormBase)
-        for p in m.parameters(recurse=False):
-            if not p.requires_grad:
-                continue
-            if is_bn:
-                bn_parameters.append(p)
-            elif name in skip or (
-                (len(p.shape) == 1 or name.endswith(".bias"))
-                and cfg.SOLVER.ZERO_WD_1D_PARAM
-            ):
+        if "head" in name:
+            for p in m.parameters():
+                if not p.requires_grad:
+                    continue
+                head_parameters.append(p)
+        elif name in skip:
+            for p in m.parameters(recurse=False):
+                if not p.requires_grad:
+                    continue
                 zero_parameters.append(p)
-            else:
-                non_bn_parameters.append(p)
+        elif isinstance(m, torch.nn.modules.batchnorm._NormBase):
+            for p in m.parameters(recurse=False):
+                if not p.requires_grad:
+                    continue
+                bn_parameters.append(p)
+        else:
+            for p in m.parameters(recurse=False):
+                if not p.requires_grad:
+                    continue
+                base_parameters.append(p)
 
-    optim_params = [
+    optim_params_base = [
         {"params": bn_parameters, "weight_decay": cfg.BN.WEIGHT_DECAY},
-        {"params": non_bn_parameters, "weight_decay": cfg.SOLVER.WEIGHT_DECAY},
+        {"params": base_parameters, "weight_decay": cfg.SOLVER.WEIGHT_DECAY},
         {"params": zero_parameters, "weight_decay": 0.0},
     ]
-    optim_params = [x for x in optim_params if len(x["params"])]
+    optim_params_base = [x for x in optim_params_base if len(x["params"])]
+    optim_params_head = [
+        {"params": head_parameters, "weight_decay": cfg.SOLVER.WEIGHT_DECAY},
+    ]
+    optim_params_head = [x for x in optim_params_head if len(x["params"])]
+    optim_params = optim_params_base + optim_params_head
 
     # Check all parameters will be passed into optimizer.
-    # assert len(list(model.parameters())) == len(non_bn_parameters) + len(
-    #     bn_parameters
-    # ) + len(
-    #     zero_parameters
-    # ), "parameter size does not match: {} + {} + {} != {}".format(
-    #     len(non_bn_parameters),
-    #     len(bn_parameters),
-    #     len(zero_parameters),
-    #     len(list(model.parameters())),
-    # )
-    print(
-        "bn {}, non bn {}, zero {}".format(
-            len(bn_parameters), len(non_bn_parameters), len(zero_parameters)
-        )
+    assert len(list(model.parameters())) == len(head_parameters) + len(base_parameters) + len(
+        bn_parameters
+    ) + len(zero_parameters
+    ), "parameter size does not match: {} + {} + {} != {}".format(
+        len(non_bn_parameters),
+        len(bn_parameters),
+        len(zero_parameters),
+        len(list(model.parameters())),
     )
 
+    logger.info("Break down the paramters into {} groups: {} for bn, {} for base, {} for head, and {} for zero-wd".format(
+            len(optim_params),
+            len(bn_parameters),
+            len(base_parameters),
+            len(head_parameters),
+            len(zero_parameters),
+    ))
+
     if cfg.SOLVER.OPTIMIZING_METHOD == "sgd":
-        return torch.optim.SGD(
+        if cfg.ADAPTATION.ENABLE:
+            optimizer_f = torch.optim.SGD(
+            optim_params_base,
+            lr=cfg.SOLVER.BASE_LR,
+            momentum=cfg.SOLVER.MOMENTUM,
+            weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            dampening=cfg.SOLVER.DAMPENING,
+            nesterov=cfg.SOLVER.NESTEROV,
+        )
+            optimizer_c = torch.optim.SGD(
+            optim_params_head,
+            lr=cfg.SOLVER.BASE_LR,
+            momentum=cfg.SOLVER.MOMENTUM,
+            weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            dampening=cfg.SOLVER.DAMPENING,
+            nesterov=cfg.SOLVER.NESTEROV,
+        )
+            return optimizer_f, optimizer_c
+        else:
+            return torch.optim.SGD(
             optim_params,
             lr=cfg.SOLVER.BASE_LR,
             momentum=cfg.SOLVER.MOMENTUM,
