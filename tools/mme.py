@@ -77,13 +77,13 @@ def train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch
         train_meter.iter_toc()
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         train_meter.update_predictions(lab_preds, lab_labels)
-        torch.cuda.synchronize()
+        # torch.cuda.synchronize()
         train_meter.iter_tic()
 
-    clear_memory(inputs_source, labels_source, lab_preds, loss_s)
-    clear_memory(inputs_target_unl, labels_target_unl, unl_preds, loss_h)
-    if semi_supervised:
-        clear_memory(inputs_target_lab, labels_target_lab)
+    # clear_memory(inputs_source, labels_source, lab_preds, loss_s)
+    # clear_memory(inputs_target_unl, labels_target_unl, unl_preds, loss_h)
+    # if semi_supervised:
+    #     clear_memory(inputs_target_lab, labels_target_lab)
     log_epoch_stats(train_meter, cur_epoch, writer, cfg, tag="Train")
     train_meter.reset()
 

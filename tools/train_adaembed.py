@@ -709,21 +709,7 @@ def train(cfg):
     models = [model, model_momentum]
 
     # Construct the optimizer.
-    sub_modules = []
-    if cfg.NUM_GPUS > 1:
-        for name, sub_module in model.module.named_modules():
-            if name!="head":
-                sub_modules.append(sub_module)
-        backbone = nn.Sequential(*sub_modules)
-        classifier = model.module.get_submodule("head")
-    else:
-        for name, sub_module in model.named_modules():
-            if name!="head":
-                sub_modules.append(sub_module)
-        backbone = nn.Sequential(*sub_modules)
-        classifier = model.get_submodule("head")
-    optimizer_f = optim.construct_optimizer(backbone, cfg)
-    optimizer_c = optim.construct_optimizer(classifier, cfg)
+    optimizer_f, optimizer_c = optim.construct_optimizer(model, cfg)
     optimizers = [optimizer_f, optimizer_c]
     # Create a GradScaler for mixed precision training
     scaler = torch.cuda.amp.GradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)
