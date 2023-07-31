@@ -24,21 +24,6 @@ rm quickdraw.zip
 rm real.zip
 rm sketch.zip
 
-cd /data/slowfast
-mkdir -p visda
-cd visda
-wget http://csr.bu.edu/ftp/visda17/clf/train.tar
-wget http://csr.bu.edu/ftp/visda17/clf/validation.tar
-wget http://csr.bu.edu/ftp/visda17/clf/test.tar
-
-tar xvf train.tar
-tar xvf validation.tar
-tar xvf test.tar
-
-rm train.tar
-rm validation.tar
-rm test.tar
-
 cd /data/domainnet
 wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/clipart_train.txt
 wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/clipart_test.txt
@@ -52,3 +37,19 @@ wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/real_train.txt
 wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/real_test.txt
 wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/sketch_train.txt
 wget http://csr.bu.edu/ftp/visda/2019/multi-source/domainnet/txt/sketch_test.txt
+
+
+cd /data
+mkdir -p visda
+cd visda
+wget http://csr.bu.edu/ftp/visda17/clf/train.tar
+wget http://csr.bu.edu/ftp/visda17/clf/validation.tar
+wget http://csr.bu.edu/ftp/visda17/clf/test.tar
+
+tar xvf train.tar
+tar xvf validation.tar
+tar xvf test.tar
+
+rm train.tar
+rm validation.tar
+rm test.tar

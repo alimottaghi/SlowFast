@@ -23,7 +23,7 @@ import slowfast.visualization.tensorboard_vis as tb
 from slowfast.datasets import loader
 from slowfast.datasets.mixup import MixUp
 from slowfast.models import build_model
-from slowfast.utils.meters import EpochTimer, TrainMeter, ValMeter, AdaMeter, AdaEmbedMeter
+from slowfast.utils.meters import AdaptationMeter, ValMeter, EpochTimer
 
 logger = logging.get_logger(__name__)
 
@@ -598,7 +598,7 @@ def train(cfg):
         train_loaders = [source_loader, target_unl_loader]
     
     # Create meters.
-    train_meter = AdaEmbedMeter(len(train_loaders[0]), cfg)
+    train_meter = AdaptationMeter(len(train_loaders[0]), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
     # set up writer for logging to Tensorboard format.

@@ -17,7 +17,7 @@ import slowfast.utils.metrics as metrics
 import slowfast.utils.misc as misc
 import slowfast.visualization.tensorboard_vis as tb
 from slowfast.models import build_model
-from slowfast.utils.meters import AdaMeter, TrainMeter, ValMeter, EpochTimer
+from slowfast.utils.meters import AdaptationMeter, ValMeter, EpochTimer
 from slowfast.datasets import loader
 from slowfast.datasets import utils as data_utils
 
@@ -52,11 +52,12 @@ def train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch
             inputs_target_lab, labels_target_lab, target_lab_iter = get_next_batch(target_lab_iter, target_lab_loader, cur_iter, target_lab_size, cfg)
             lab_inputs = [torch.cat((inputs_source[0], inputs_target_lab[0]), dim=0)]
             lab_labels = torch.cat((labels_source, labels_target_lab), dim=0)
+        train_meter.data_toc()
 
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / source_size, cfg)
         optim.set_lr(optimizer_f, lr)
         optim.set_lr(optimizer_c, lr)
-        train_meter.data_toc()
+        mu = (0.5 + math.cos(math.pi * (cfg.SOLVER.MAX_EPOCH - cur_epoch - float(cur_iter) / data_size) / cfg.SOLVER.MAX_EPOCH) / 2)
 
         # Step A train all networks to minimize loss on source domain
         with torch.cuda.amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
@@ -67,7 +68,7 @@ def train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch
         # Step B train classifier to maximize discrepancy
         with torch.cuda.amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
             unl_preds, unl_feats = model(unl_inputs, reverse=True)
-            loss_h = cfg.MME.LAMBDA * discrepancy_loss(unl_preds)
+            loss_h = cfg.MME.LAMBDA * mu * discrepancy_loss(unl_preds)
         perform_backward_pass(optimizer_f, optimizer_c, scaler, loss_h, model, cfg)
 
         loss, top1_err, top5_err = calculate_errors(loss_s, lab_preds, lab_labels, cfg)
@@ -278,7 +279,7 @@ def train(cfg):
     else:
         train_loaders = [source_loader, target_loaders["unl"]]
 
-    train_meter = TrainMeter(len(train_loaders[0]), cfg)
+    train_meter = AdaptationMeter(len(train_loaders[0]), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
     logger.info("Start epoch: {}".format(start_epoch + 1))

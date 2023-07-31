@@ -419,7 +419,7 @@ def train(cfg):
     # Build the video model and print model statistics.
     cfg.EXTRACT.ENABLE = True
     cfg.SWIN.TEMP = cfg.MME.TEMP
-    cfg.SWIN.ETA = cfg.MME.LAMBDA
+    cfg.SWIN.ETA = cfg.MME.ETA
     model = build_model(cfg)
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)

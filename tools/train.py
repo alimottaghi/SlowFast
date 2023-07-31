@@ -18,7 +18,7 @@ import slowfast.utils.metrics as metrics
 import slowfast.utils.misc as misc
 import slowfast.visualization.tensorboard_vis as tb
 from slowfast.models import build_model
-from slowfast.utils.meters import AdaMeter, TrainMeter, ValMeter, EpochTimer
+from slowfast.utils.meters import TrainMeter, ValMeter, EpochTimer
 from slowfast.datasets import loader
 from slowfast.datasets import utils as data_utils
 
