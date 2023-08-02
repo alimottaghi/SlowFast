@@ -4,6 +4,8 @@
 """Model construction functions."""
 
 import torch
+import torch.nn as nn
+import torchvision
 from fvcore.common.registry import Registry
 
 MODEL_REGISTRY = Registry("MODEL")
@@ -50,4 +52,7 @@ def build_model(cfg, gpu_id=None):
         model = torch.nn.parallel.DistributedDataParallel(
             module=model, device_ids=[cur_device], output_device=cur_device
         )
+    # compile model
+    torch.compile(model)
+    
     return model

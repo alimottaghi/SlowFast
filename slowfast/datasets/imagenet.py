@@ -159,43 +159,6 @@ class Imagenet(torch.utils.data.Dataset):
         im = im.permute([2, 0, 1])
         return im
 
-    def _prepare_im_res(self, im_path):
-        # Prepare resnet style augmentation.
-        im = self.load_image(im_path)
-        # Train and test setups differ
-        train_size, test_size = (
-            self.cfg.DATA.TRAIN_CROP_SIZE,
-            self.cfg.DATA.TEST_CROP_SIZE,
-        )
-        if self.mode == "train":
-            # For training use random_sized_crop, horizontal_flip, augment, lighting
-            im = transform.random_sized_crop_img(
-                im,
-                train_size,
-                jitter_scale=self.cfg.DATA.TRAIN_JITTER_SCALES_RELATIVE,
-                jitter_aspect=self.cfg.DATA.TRAIN_JITTER_ASPECT_RELATIVE,
-            )
-            im, _ = transform.horizontal_flip(prob=0.5, images=im)
-            # im = transforms.augment(im, cfg.TRAIN.AUGMENT)
-            im = transform.lighting_jitter(
-                im,
-                0.1,
-                self.cfg.DATA.TRAIN_PCA_EIGVAL,
-                self.cfg.DATA.TRAIN_PCA_EIGVEC,
-            )
-        else:
-            # For testing use scale and center crop
-            im, _ = transform.uniform_crop(
-                im, test_size, spatial_idx=1, scale_size=train_size
-            )
-        # For training and testing use color normalization
-        im = transform.color_normalization(
-            im, self.cfg.DATA.MEAN, self.cfg.DATA.STD
-        )
-        # Convert HWC/RGB/float to CHW/BGR/float format
-        # im = np.ascontiguousarray(im[:, :, ::-1].transpose([2, 0, 1]))
-        return [im]
-
     def _prepare_im_tf(self, im_path):
         with g_pathmgr.open(im_path, "rb") as f:
             with Image.open(f) as im:
@@ -209,6 +172,8 @@ class Imagenet(torch.utils.data.Dataset):
         aug_transform_train = transforms_imagenet_train(
             img_size=(train_size, train_size),
             color_jitter=self.cfg.AUG.COLOR_JITTER,
+            grayscale=self.cfg.AUG.GRAYSCALE,
+            gaussian_blur=self.cfg.AUG.GAUSSIAN_BLUR,
             auto_augment=self.cfg.AUG.AA_TYPE,
             interpolation=self.cfg.AUG.INTERPOLATION,
             re_prob=self.cfg.AUG.RE_PROB,

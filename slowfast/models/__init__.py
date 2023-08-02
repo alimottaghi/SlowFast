@@ -6,6 +6,7 @@ from .custom_video_model_builder import *  # noqa
 from .video_model_builder import ResNet, SlowFast  # noqa
 from .vit import vit_base_patch16_224, TimeSformer  # noqa
 from .swin_transfomer import SwinTransformer
+from .swin_transformer_v2 import SwinTransformerV2
 from .swin_transfomer3d import SwinTransformer3D
 
 try:

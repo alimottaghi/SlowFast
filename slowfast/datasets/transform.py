@@ -800,6 +800,8 @@ def transforms_imagenet_train(
     hflip=0.5,
     vflip=0.0,
     color_jitter=0.4,
+    grayscale=0.2,
+    gaussian_blur=0.5,
     auto_augment=None,
     interpolation="random",
     use_prefetcher=False,
@@ -866,6 +868,14 @@ def transforms_imagenet_train(
             # if it's a scalar, duplicate for brightness, contrast, and saturation, no hue
             color_jitter = (float(color_jitter),) * 3
         secondary_tfl += [transforms.ColorJitter(*color_jitter)]
+
+    if grayscale:
+        # add grayscale as a secondary transform with prob 0.2
+        secondary_tfl += [transforms.RandomGrayscale(p=grayscale)]
+
+    # if gaussian_blur:
+    #     # add gaussian blur as a secondary transform with prob 0.5 and kernel size 1/20th of img size
+    #     secondary_tfl += [transforms.GaussianBlur((3, 3), sigma=(1.1, 2.0), p=gaussian_blur)]
 
     final_tfl = []
     final_tfl += [

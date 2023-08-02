@@ -59,13 +59,13 @@ def construct_optimizer(model, cfg):
                 base_parameters.append(p)
 
     optim_params_base = [
-        {"params": bn_parameters, "weight_decay": cfg.BN.WEIGHT_DECAY},
+        # {"params": bn_parameters, "weight_decay": cfg.BN.WEIGHT_DECAY},
         {"params": base_parameters, "weight_decay": cfg.SOLVER.WEIGHT_DECAY},
-        {"params": zero_parameters, "weight_decay": 0.0},
+        # {"params": zero_parameters, "weight_decay": 0.0},
     ]
     optim_params_base = [x for x in optim_params_base if len(x["params"])]
     optim_params_head = [
-        {"params": head_parameters, "weight_decay": cfg.SOLVER.WEIGHT_DECAY},
+        {"params": head_parameters, "weight_decay": 10 * cfg.SOLVER.WEIGHT_DECAY},
     ]
     optim_params_head = [x for x in optim_params_head if len(x["params"])]
     optim_params = optim_params_base + optim_params_head
@@ -98,15 +98,15 @@ def construct_optimizer(model, cfg):
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             dampening=cfg.SOLVER.DAMPENING,
             nesterov=cfg.SOLVER.NESTEROV,
-        )
+            )
             optimizer_c = torch.optim.SGD(
             optim_params_head,
-            lr=cfg.SOLVER.BASE_LR,
+            lr=10*cfg.SOLVER.BASE_LR,
             momentum=cfg.SOLVER.MOMENTUM,
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             dampening=cfg.SOLVER.DAMPENING,
             nesterov=cfg.SOLVER.NESTEROV,
-        )
+            )
             return optimizer_f, optimizer_c
         else:
             return torch.optim.SGD(
@@ -118,19 +118,49 @@ def construct_optimizer(model, cfg):
             nesterov=cfg.SOLVER.NESTEROV,
         )
     elif cfg.SOLVER.OPTIMIZING_METHOD == "adam":
-        return torch.optim.Adam(
-            optim_params,
+        if cfg.ADAPTATION.ENABLE:
+            optimizer_f = torch.optim.Adam(
+            optim_params_base,
             lr=cfg.SOLVER.BASE_LR,
             betas=(0.9, 0.999),
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
-        )
+            )
+            optimizer_c = torch.optim.Adam(
+            optim_params_head,
+            lr=10*cfg.SOLVER.BASE_LR,
+            betas=(0.9, 0.999),
+            weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
+            return optimizer_f, optimizer_c
+        else:
+            return torch.optim.Adam(
+                optim_params,
+                lr=cfg.SOLVER.BASE_LR,
+                betas=(0.9, 0.999),
+                weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
     elif cfg.SOLVER.OPTIMIZING_METHOD == "adamw":
-        return torch.optim.AdamW(
-            optim_params,
+        if cfg.ADAPTATION.ENABLE:
+            optimizer_f = torch.optim.AdamW(
+            optim_params_base,
             lr=cfg.SOLVER.BASE_LR,
             eps=1e-08,
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
-        )
+            )
+            optimizer_c = torch.optim.AdamW(
+            optim_params_head,
+            lr=10*cfg.SOLVER.BASE_LR,
+            eps=1e-08,
+            weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
+            return optimizer_f, optimizer_c
+        else:
+            return torch.optim.AdamW(
+                optim_params,
+                lr=cfg.SOLVER.BASE_LR,
+                eps=1e-08,
+                weight_decay=cfg.SOLVER.WEIGHT_DECAY,
+            )
     else:
         raise NotImplementedError(
             "Does not support {} optimizer".format(cfg.SOLVER.OPTIMIZING_METHOD)

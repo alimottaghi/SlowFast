@@ -7,7 +7,6 @@ import pprint
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
 
 import slowfast.models.losses as losses
 import slowfast.models.optimizer as optim
@@ -193,15 +192,6 @@ def log_epoch_time(cur_epoch, start_epoch, epoch_timer, loader_len):
                 f"{epoch_timer.avg_epoch_time()/loader_len:.2f}s in average.")
 
 
-def calculate_and_update_precise_bn(loader, model, num_iters, cfg):
-    def _gen_loader():
-        for inputs, _, _ in loader:
-            inputs, _, _ = transfer_to_device(inputs, None, None, cfg)
-            yield inputs
-
-    update_bn_stats(model, _gen_loader(), num_iters)
-
-
 def train(cfg):
     du.init_distributed_training(cfg)
     np.random.seed(cfg.RNG_SEED)
@@ -221,8 +211,7 @@ def train(cfg):
 
     train_loader = loader.construct_loader(cfg, "train")
     val_loader = loader.construct_loader(cfg, "val")
-    precise_bn_loader = loader.construct_loader(cfg, "train", is_precise_bn=True) if cfg.BN.USE_PRECISE_STATS else None
-
+    
     train_meter = TrainMeter(len(train_loader), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
@@ -235,17 +224,10 @@ def train(cfg):
         epoch_timer.epoch_toc()
         log_epoch_time(cur_epoch, start_epoch, epoch_timer, len(train_loader))
 
-        is_checkp_epoch = cu.is_checkpoint_epoch(cfg, cur_epoch, None)
-        is_eval_epoch = misc.is_eval_epoch(cfg, cur_epoch, None)
-
-        if (is_checkp_epoch or is_eval_epoch) and cfg.BN.USE_PRECISE_STATS and len(get_bn_modules(model)) > 0:
-            calculate_and_update_precise_bn(precise_bn_loader, model, min(cfg.BN.NUM_BATCHES_PRECISE, len(precise_bn_loader)), cfg)
-        _ = misc.aggregate_sub_bn_stats(model)
-
-        if is_checkp_epoch:
+        if cu.is_checkpoint_epoch(cfg, cur_epoch, None):
             cu.save_checkpoint(cfg.OUTPUT_DIR, model, optimizer, cur_epoch, cfg, scaler if cfg.TRAIN.MIXED_PRECISION else None)
 
-        if is_eval_epoch:
+        if misc.is_eval_epoch(cfg, cur_epoch, None):
             eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer)
 
     if writer is not None:

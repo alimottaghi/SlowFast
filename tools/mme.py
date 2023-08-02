@@ -17,7 +17,7 @@ import slowfast.utils.metrics as metrics
 import slowfast.utils.misc as misc
 import slowfast.visualization.tensorboard_vis as tb
 from slowfast.models import build_model
-from slowfast.utils.meters import AdaptationMeter, ValMeter, EpochTimer
+from slowfast.utils.meters import TrainMeter, ValMeter, EpochTimer
 from slowfast.datasets import loader
 from slowfast.datasets import utils as data_utils
 
@@ -56,8 +56,8 @@ def train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch
 
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / source_size, cfg)
         optim.set_lr(optimizer_f, lr)
-        optim.set_lr(optimizer_c, lr)
-        mu = (0.5 + math.cos(math.pi * (cfg.SOLVER.MAX_EPOCH - cur_epoch - float(cur_iter) / data_size) / cfg.SOLVER.MAX_EPOCH) / 2)
+        optim.set_lr(optimizer_c, 10*lr)
+        mu = (0.5 + math.cos(math.pi * (cfg.SOLVER.MAX_EPOCH - cur_epoch - float(cur_iter) / source_size) / cfg.SOLVER.MAX_EPOCH) / 2)
 
         # Step A train all networks to minimize loss on source domain
         with torch.cuda.amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
@@ -279,7 +279,7 @@ def train(cfg):
     else:
         train_loaders = [source_loader, target_loaders["unl"]]
 
-    train_meter = AdaptationMeter(len(train_loaders[0]), cfg)
+    train_meter = TrainMeter(len(train_loaders[0]), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
     logger.info("Start epoch: {}".format(start_epoch + 1))

@@ -97,7 +97,12 @@ def _ntuple(n):
             return x
         return tuple(repeat(x, n))
     return parse
+
+to_1tuple = _ntuple(1)
 to_2tuple = _ntuple(2)
+to_3tuple = _ntuple(3)
+to_4tuple = _ntuple(4)
+to_ntuple = _ntuple
 
 # Calculate symmetric padding for a convolution
 def get_padding(kernel_size: int, stride: int = 1, dilation: int = 1, **_) -> int:

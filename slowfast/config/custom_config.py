@@ -16,6 +16,10 @@ def add_custom_config(_C):
     _C.DATA.SAMPLE_RATIO = 1.0
     _C.SOLVER.EPOCH_ITER_MAX = 1000
 
+    # Augmentation Options
+    _C.AUG.GRAYSCALE = 0.2
+    _C.AUG.GAUSSIAN_BLUR = 0.5
+
     # use a different num_frames during test time. If -1, use DATA.NUM_FRAMES
     _C.EXTRACT = CfgNode()
     _C.EXTRACT.NUM_FRAMES = 16
@@ -46,6 +50,7 @@ def add_custom_config(_C):
     _C.SWIN.USE_CHECKPOINT = False
     _C.SWIN.APE = False
     _C.SWIN.FUSED_WINDOW_PROCESS = False
+    _C.SWIN.PRETRAINED_WINDOW_SIZES = [0, 0, 0, 0]
     _C.SWIN.PRETRAINED_FILEPATH = ""
     _C.SWIN.PRETRAINED_2D = False
     _C.SWIN.FEW_SHOT = False
