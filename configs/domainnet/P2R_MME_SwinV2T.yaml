@@ -1,7 +1,7 @@
 TRAIN:
   ENABLE: True
   DATASET: imagenet
-  BATCH_SIZE: 768
+  BATCH_SIZE: 256
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 10
   AUTO_RESUME: True
@@ -46,7 +46,7 @@ SWIN:
   NORM_LAYER: layernorm
   SPATIAL_TYPE: avg
   FEW_SHOT: True
-  TEMP: 0.07
+  TEMP: 0.05
 SOLVER:
   BASE_LR: 0.05
   LR_POLICY: cosine
@@ -84,8 +84,22 @@ TENSORBOARD:
   SAMPLE_VIS:
     ENABLE: True
     LOG_PERIOD: 1000
+ADAPTATION:
+  ENABLE: True
+  ADAPTATION_TYPE: 'MME'
+  SOURCE: ['clipart_train']
+  TARGET: ['sketch_train']
+  ALPHA: 0.125
+  BETA: 1.0
+  BANK_SIZE: 1000
+  SEMI_SUPERVISED:
+    ENABLE: False
+    NUM_SHOTS: 3
+MME:
+  LAMBDA: 0.2
+  TEMP: 0.05
 NUM_GPUS: 4
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/C2S_Sup_SwinV2T_Temp0.07
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/C2S_MME_SwinV2T_test0
 LOG_MODEL_INFO: False

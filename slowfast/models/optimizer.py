@@ -101,7 +101,7 @@ def construct_optimizer(model, cfg):
             )
             optimizer_c = torch.optim.SGD(
             optim_params_head,
-            lr=10*cfg.SOLVER.BASE_LR,
+            lr=cfg.SOLVER.BASE_LR,
             momentum=cfg.SOLVER.MOMENTUM,
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             dampening=cfg.SOLVER.DAMPENING,
@@ -127,7 +127,7 @@ def construct_optimizer(model, cfg):
             )
             optimizer_c = torch.optim.Adam(
             optim_params_head,
-            lr=10*cfg.SOLVER.BASE_LR,
+            lr=cfg.SOLVER.BASE_LR,
             betas=(0.9, 0.999),
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             )
@@ -149,7 +149,7 @@ def construct_optimizer(model, cfg):
             )
             optimizer_c = torch.optim.AdamW(
             optim_params_head,
-            lr=10*cfg.SOLVER.BASE_LR,
+            lr=cfg.SOLVER.BASE_LR,
             eps=1e-08,
             weight_decay=cfg.SOLVER.WEIGHT_DECAY,
             )

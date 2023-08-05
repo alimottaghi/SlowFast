@@ -56,7 +56,7 @@ def train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch
 
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / source_size, cfg)
         optim.set_lr(optimizer_f, lr)
-        optim.set_lr(optimizer_c, 10*lr)
+        optim.set_lr(optimizer_c, lr)
         mu = (0.5 + math.cos(math.pi * (cfg.SOLVER.MAX_EPOCH - cur_epoch - float(cur_iter) / source_size) / cfg.SOLVER.MAX_EPOCH) / 2)
 
         # Step A train all networks to minimize loss on source domain
@@ -285,11 +285,8 @@ def train(cfg):
     logger.info("Start epoch: {}".format(start_epoch + 1))
     epoch_timer = EpochTimer()
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
-        logger.info("Shuffling data...")
         for train_loader in train_loaders:
             loader.shuffle_dataset(train_loader, cur_epoch)
-        
-        logger.info(f"Epoch {cur_epoch + 1}/{cfg.SOLVER.MAX_EPOCH} started ...")
         epoch_timer.epoch_tic()
         train_epoch(train_loaders, model, optimizers, scaler, train_meter, cur_epoch, cfg, writer)
         epoch_timer.epoch_toc()
