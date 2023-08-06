@@ -6,7 +6,7 @@ import logging as log
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from detectron2.utils.visualizer import Visualizer
+# from detectron2.utils.visualizer import Visualizer
 
 import slowfast.utils.logging as logging
 from slowfast.utils.misc import get_class_names
@@ -42,7 +42,7 @@ def _create_text_labels(classes, scores, class_names, ground_truth=False):
     return labels
 
 
-class ImgVisualizer(Visualizer):
+class ImgVisualizer(): # Visualizer
     def __init__(self, img_rgb, meta, **kwargs):
         """
         See https://github.com/facebookresearch/detectron2/blob/master/detectron2/utils/visualizer.py

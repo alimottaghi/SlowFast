@@ -4,9 +4,9 @@
 import queue
 import cv2
 import torch
-from detectron2 import model_zoo
-from detectron2.config import get_cfg
-from detectron2.engine import DefaultPredictor
+# from detectron2 import model_zoo
+# from detectron2.config import get_cfg
+# from detectron2.engine import DefaultPredictor
 
 import slowfast.utils.checkpoint as cu
 from slowfast.datasets import cv2_transform
@@ -169,10 +169,10 @@ class Detectron2Predictor:
             gpu_id (Optional[int]): GPU id.
         """
 
-        self.cfg = get_cfg()
-        self.cfg.merge_from_file(
-            model_zoo.get_config_file(cfg.DEMO.DETECTRON2_CFG)
-        )
+        self.cfg = cfg  # get_cfg()
+        # self.cfg.merge_from_file(
+        #     model_zoo.get_config_file(cfg.DEMO.DETECTRON2_CFG)
+        # )
         self.cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = cfg.DEMO.DETECTRON2_THRESH
         self.cfg.MODEL.WEIGHTS = cfg.DEMO.DETECTRON2_WEIGHTS
         self.cfg.INPUT.FORMAT = cfg.DEMO.INPUT_FORMAT
@@ -184,7 +184,7 @@ class Detectron2Predictor:
 
         logger.info("Initialized Detectron2 Object Detection Model.")
 
-        self.predictor = DefaultPredictor(self.cfg)
+        self.predictor = torch.nn.Identity() # DefaultPredictor(self.cfg)
 
     def __call__(self, task):
         """

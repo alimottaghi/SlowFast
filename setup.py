@@ -19,7 +19,6 @@ setup(
         "tqdm",
         "psutil",
         "matplotlib",
-        "detectron2",
         "opencv-python",
         "pandas",
         "torchvision>=0.4.2",

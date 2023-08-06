@@ -5,7 +5,7 @@
 
 import torch
 import torch.nn as nn
-from detectron2.layers import ROIAlign
+# from detectron2.layers import ROIAlign
 
 
 class ResNetRoIHead(nn.Module):
@@ -72,12 +72,13 @@ class ResNetRoIHead(nn.Module):
             )
             self.add_module("s{}_tpool".format(pathway), temporal_pool)
 
-            roi_align = ROIAlign(
-                resolution[pathway],
-                spatial_scale=1.0 / scale_factor[pathway],
-                sampling_ratio=0,
-                aligned=aligned,
-            )
+            roi_align = 0
+            # ROIAlign(
+            #     resolution[pathway],
+            #     spatial_scale=1.0 / scale_factor[pathway],
+            #     sampling_ratio=0,
+            #     aligned=aligned,
+            # )
             self.add_module("s{}_roi".format(pathway), roi_align)
             spatial_pool = nn.MaxPool2d(resolution[pathway], stride=1)
             self.add_module("s{}_spool".format(pathway), spatial_pool)

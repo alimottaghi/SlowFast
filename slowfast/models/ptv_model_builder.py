@@ -6,7 +6,7 @@
 
 from functools import partial
 import torch.nn as nn
-from detectron2.layers import ROIAlign
+# from detectron2.layers import ROIAlign
 
 from slowfast.models.batchnorm_helper import get_norm
 from slowfast.models.video_model_builder import _POOL1, _TEMPORAL_KERNEL_BASIS
@@ -142,7 +142,7 @@ class PTVResNet(nn.Module):
                 resolution=[cfg.DETECTION.ROI_XFORM_RESOLUTION] * 2,
                 spatial_scale=1.0 / float(cfg.DETECTION.SPATIAL_SCALE_FACTOR),
                 sampling_ratio=0,
-                roi=ROIAlign,
+                roi=0, # ROIAlign,
             )
 
         self.model = create_resnet(
@@ -293,7 +293,7 @@ class PTVSlowFast(nn.Module):
                 resolution=[cfg.DETECTION.ROI_XFORM_RESOLUTION] * 2,
                 spatial_scale=1.0 / float(cfg.DETECTION.SPATIAL_SCALE_FACTOR),
                 sampling_ratio=0,
-                roi=ROIAlign,
+                roi=0, # ROIAlign,
             )
             head_pool_kernel_sizes = (
                 (
