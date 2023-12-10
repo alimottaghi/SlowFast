@@ -98,10 +98,10 @@ ADAPTATION:
     ENABLE: False
     NUM_SHOTS: 3
 ADAEMBED:
-  LAMBDA_H: 0.2
+  LAMBDA_H: 0.0
   LAMBDA_T: 2.0
   LAMBDA_P: 0.0
-  LAMBDA_C: 0.1
+  LAMBDA_C: 0.0
   TEMP: 0.05
   EMA: 0.95
   TAU: 0.9
@@ -109,9 +109,9 @@ ADAEMBED:
   PSEUDO_TYPE: AdaMatch
   THRESHOLDING: relative
   ALIGNMENT: True
-  SAMPLING: True
+  SAMPLING: False
 NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/logs/office_home/R2P_AdaEmbed_Run1
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/office_home/R2P_AdaMatch_Run1
 LOG_MODEL_INFO: False
