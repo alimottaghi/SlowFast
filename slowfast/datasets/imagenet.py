@@ -15,13 +15,17 @@ from iopath.common.file_io import g_pathmgr
 from PIL import Image
 from torchvision import transforms as transforms_tv
 
+import logging
+pil_logger = logging.getLogger('PIL')
+pil_logger.setLevel(logging.WARNING)
+
 import slowfast.datasets.transform as transform
-import slowfast.utils.logging as logging
+import slowfast.utils.logging as mylogging
 
 from .build import DATASET_REGISTRY
 from .transform import transforms_imagenet_train
 
-logger = logging.get_logger(__name__)
+logger = mylogging.get_logger(__name__)
 
 
 @DATASET_REGISTRY.register()
