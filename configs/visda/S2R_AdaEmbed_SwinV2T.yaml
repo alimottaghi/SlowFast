@@ -49,7 +49,7 @@ SWIN:
   FEW_SHOT: True
   TEMP: 0.07
 SOLVER:
-  BASE_LR: 0.003
+  BASE_LR: 0.005
   LR_POLICY: cosine
   WARMUP_START_LR: 0.0
   WARMUP_EPOCHS: 1.0
@@ -100,19 +100,19 @@ ADAPTATION:
     NUM_SHOTS: 3
 ADAEMBED:
   LAMBDA_H: 0.2
-  LAMBDA_T: 5.0
+  LAMBDA_T: 10.0
   LAMBDA_P: 0.0
   LAMBDA_C: 0.1
   TEMP: 0.05
   EMA: 0.95
   TAU: 0.9
   NUM_NEIGHBORS: 10
-  PSEUDO_TYPE: AdaMatch
+  PSEUDO_TYPE: AdaEmbed
   THRESHOLDING: relative
   ALIGNMENT: True
   SAMPLING: True
-NUM_GPUS: 8
+NUM_GPUS: 1
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/logs/visda/S2R_AdaEmbed_Run1
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/visda/S2R_AdaEmbed_Shorter7
 LOG_MODEL_INFO: False

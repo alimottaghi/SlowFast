@@ -50,7 +50,9 @@ SWIN:
 SOLVER:
   BASE_LR: 0.05
   LR_POLICY: cosine
-  MAX_EPOCH: 40
+  WARMUP_START_LR: 0.0
+  WARMUP_EPOCHS: 10.0
+  MAX_EPOCH: 50
   MOMENTUM: 0.9
   WEIGHT_DECAY: 1e-4
   OPTIMIZING_METHOD: sgd
@@ -96,10 +98,10 @@ ADAPTATION:
     ENABLE: False
     NUM_SHOTS: 3
 ADAEMBED:
-  LAMBDA_H: 0.1
+  LAMBDA_H: 0.2
   LAMBDA_T: 2.0
   LAMBDA_P: 0.0
-  LAMBDA_C: 0.0
+  LAMBDA_C: 0.1
   TEMP: 0.05
   EMA: 0.95
   TAU: 0.9
@@ -108,8 +110,8 @@ ADAEMBED:
   THRESHOLDING: relative
   ALIGNMENT: True
   SAMPLING: True
-NUM_GPUS: 4
+NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/R2P_AdaEmbed_Test1
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/R2P_AdaEmbed_Run1
 LOG_MODEL_INFO: False
