@@ -106,6 +106,9 @@ class Imagenet(torch.utils.data.Dataset):
                 else:
                     lab_class = random.sample(class_cases, self.cfg.ADAPTATION.SEMI_SUPERVISED.NUM_SHOTS)
                 lab_cases.extend(lab_class)
+            batch_size = int(self.cfg.TRAIN.BATCH_SIZE / max(1, self.cfg.NUM_GPUS))
+            if len(lab_cases) < batch_size:
+                lab_cases = random.choices(lab_cases, k=batch_size)
         else:
             num_cases = len(all_cases)
             num_lab = int(self.cfg.ADAPTATION.SEMI_SUPERVISED.LAB_RATIO*num_cases)
