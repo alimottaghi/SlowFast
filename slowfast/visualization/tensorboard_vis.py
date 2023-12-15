@@ -693,7 +693,7 @@ def tensorboard_confusion_matrix(cmtx, cfg, tag="Histogram"):
         plt.text(
             j,
             i,
-            format(cmtx[i, j], ".2f") if cmtx[i, j] != 0 else ".",
+            format(cmtx[i, j], ".3f") if cmtx[i, j] != 0 else ".",
             horizontalalignment="center",
             color=color,
         )
