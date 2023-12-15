@@ -99,19 +99,19 @@ ADAPTATION:
     NUM_SHOTS: 3
 ADAEMBED:
   LAMBDA_H: 0.0
-  LAMBDA_T: 0.0
+  LAMBDA_T: 2.0
   LAMBDA_P: 0.0
-  LAMBDA_C: 0.0
+  LAMBDA_C: 0.1
   TEMP: 0.05
   EMA: 0.95
-  TAU: 0.9
+  TAU: 0.5
   NUM_NEIGHBORS: 10
   PSEUDO_TYPE: AdaEmbed
-  THRESHOLDING: relative
-  ALIGNMENT: True
-  SAMPLING: True
+  THRESHOLDING: uniform
+  ALIGNMENT: False
+  SAMPLING: False
 NUM_GPUS: 8
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/R2P_Sup_Run1
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/domainnet/R2P_AdaContrast_Run1
 LOG_MODEL_INFO: False
