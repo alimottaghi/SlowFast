@@ -114,5 +114,5 @@ ADAEMBED:
 NUM_GPUS: 1
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /pasteur/u/mottaghi/logs/visda/S2R_Sup_Shorter4
+OUTPUT_DIR: /pasteur/u/mottaghi/logs/visda/S2R_Sup_ResNet_Run1
 LOG_MODEL_INFO: False

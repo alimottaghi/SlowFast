@@ -8,6 +8,7 @@ from .vit import vit_base_patch16_224, TimeSformer  # noqa
 from .swin_transfomer import SwinTransformer
 from .swin_transformer_v2 import SwinTransformerV2
 from .swin_transfomer3d import SwinTransformer3D
+from .resnet import ResNet34
 
 try:
     from .ptv_model_builder import (

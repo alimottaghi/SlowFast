@@ -473,6 +473,24 @@ def train_epoch(
                     global_step=data_size * cur_epoch + cur_iter
                 )
 
+                # if cfg.ADAPTATION.SOURCE==['real_train'] and cfg.ADAPTATION.TARGET==['clipart_train'] and (not cfg.ADAPTATION.SEMI_SUPERVISED.ENABLE):
+                #     all_lab_preds = torch.cat(train_meter.all_lab_preds, dim=0)
+                #     all_lab_feats = torch.cat(train_meter.all_lab_feats, dim=0)
+                #     all_unl_preds = torch.cat(train_meter.all_unl_preds, dim=0)
+                #     all_unl_feats = torch.cat(train_meter.all_unl_feats, dim=0)
+                #     all_lab_labels = torch.cat(train_meter.all_lab_labels, dim=0)
+                #     all_unl_labels = torch.cat(train_meter.all_unl_labels, dim=0)
+                #     dict2save = {
+                #         "all_lab_preds": all_lab_preds.detach().cpu(),
+                #         "all_lab_feats": all_lab_feats.detach().cpu(),
+                #         "all_unl_preds": all_unl_preds.detach().cpu(),
+                #         "all_unl_feats": all_unl_feats.detach().cpu(),
+                #         "all_lab_labels": all_lab_labels.detach().cpu(),
+                #         "all_unl_labels": all_unl_labels.detach().cpu(),
+                #         "prototypes": prototypes.detach().cpu(),
+                #     }
+                #     np.save(cfg.OUTPUT_DIR + f'/step{data_size * cur_epoch + cur_iter}.npy', dict2save)
+
             if cfg.TENSORBOARD.SAMPLE_VIS.ENABLE and (data_size * cur_epoch + cur_iter)%cfg.TENSORBOARD.SAMPLE_VIS.LOG_PERIOD==0:
                 writer.add_video_pred(
                     source_strong, 
